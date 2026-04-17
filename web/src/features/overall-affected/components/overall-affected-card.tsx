@@ -1,6 +1,12 @@
 "use client";
 
-import { Label, PolarRadiusAxis, RadialBar, RadialBarChart } from "recharts";
+import {
+  Label,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  RadialBar,
+  RadialBarChart,
+} from "recharts";
 
 import {
   Card,
@@ -30,22 +36,23 @@ type Props = {
 };
 
 export function OverallAffectedCard({ data }: Props) {
-  const { avgAffectedPct, totalAnalyses } = data;
+  const safeAffectedPct = Math.min(Math.max(data.avgAffectedPct, 0), 100);
+  const displayPct = Number(safeAffectedPct.toFixed(1));
 
   const chartData = [
     {
       name: "Afetação",
-      value: avgAffectedPct,
-      fill: getBarColor(avgAffectedPct),
+      value: safeAffectedPct,
+      fill: getBarColor(safeAffectedPct),
     },
   ];
 
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="items-center pb-0">
-        <CardTitle className="font-heading text-sm font-semibold tracking-tight">Índice de afetação geral</CardTitle>
+        <CardTitle>Índice de afetação geral</CardTitle>
         <CardDescription>
-          Média ponderada — {totalAnalyses} análises
+          Média ponderada — {data.totalAnalyses} análises
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
@@ -55,15 +62,21 @@ export function OverallAffectedCard({ data }: Props) {
         >
           <RadialBarChart
             data={chartData}
-            startAngle={-90}
-            endAngle={90 - 360}
+            startAngle={180}
+            endAngle={0}
             innerRadius={60}
             outerRadius={110}
           >
+            <PolarAngleAxis
+              type="number"
+              domain={[0, 100]}
+              tick={false}
+            />
             <PolarRadiusAxis
               tick={false}
               tickLine={false}
               axisLine={false}
+              domain={[0, 100]}
             >
               <Label
                 content={({ viewBox }) => {
@@ -76,7 +89,7 @@ export function OverallAffectedCard({ data }: Props) {
                         dominantBaseline="middle"
                       >
                         <tspan className="fill-foreground text-3xl font-bold tabular-nums">
-                          {avgAffectedPct}%
+                          {displayPct}%
                         </tspan>
                         <tspan
                           x={viewBox.cx}
@@ -92,7 +105,7 @@ export function OverallAffectedCard({ data }: Props) {
                 }}
               />
             </PolarRadiusAxis>
-            <RadialBar dataKey="value" background={false} cornerRadius={6} />
+            <RadialBar dataKey="value" background cornerRadius={6} />
           </RadialBarChart>
         </ChartContainer>
       </CardContent>
