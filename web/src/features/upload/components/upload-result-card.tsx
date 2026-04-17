@@ -69,10 +69,11 @@ function getConfidenceStyle(confidence: number | null): string {
 
 export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
   const { badgeClass } = getSeverityStyle(result.severity);
-  const showAiSuggestion =
-    result.pestTypeAi != null && result.pestTypeAi !== "nao_identificado";
+  const showAiSuggestion = result.pestTypeAi != null;
   const hasLowConfidence =
-    showAiSuggestion && (result.pestTypeConfidence ?? 0) < 0.4;
+    result.pestTypeAi != null &&
+    result.pestTypeAi !== "nao_identificado" &&
+    (result.pestTypeConfidence ?? 0) < 0.4;
 
   return (
     <Card className="w-full">
