@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     # Analysis
     analysis_timeout_s: float = 10.0
 
+    # VLM Classification (OpenRouter)
+    openrouter_api_key: str = ""
+    openrouter_model: str = "google/gemini-2.5-flash-lite-preview-06-05"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    classify_timeout_s: float = 10.0
+    classify_max_tokens: int = 300
+    cache_ttl_s: int = 3600
+
     # API metadata
     api_version: str = "1.0.0"
 
