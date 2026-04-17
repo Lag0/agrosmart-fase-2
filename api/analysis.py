@@ -85,8 +85,12 @@ def analyze_image(image_path: str, output_path: str) -> dict:
 
     diseased_mask = cv2.bitwise_or(yellow_mask, brown_mask)
     diseased_mask = cv2.bitwise_and(diseased_mask, non_green)
-    diseased_mask = cv2.morphologyEx(diseased_mask, cv2.MORPH_CLOSE, KERNEL, iterations=2)
-    diseased_mask = cv2.morphologyEx(diseased_mask, cv2.MORPH_OPEN, KERNEL, iterations=1)
+    diseased_mask = cv2.morphologyEx(
+        diseased_mask, cv2.MORPH_CLOSE, KERNEL, iterations=2
+    )
+    diseased_mask = cv2.morphologyEx(
+        diseased_mask, cv2.MORPH_OPEN, KERNEL, iterations=1
+    )
 
     diseased_pixels = int(cv2.countNonZero(diseased_mask))
 
@@ -96,7 +100,9 @@ def analyze_image(image_path: str, output_path: str) -> dict:
     severity = classify_severity(affected_pct)
 
     # --- Contours and bounding boxes ---
-    contours, _ = cv2.findContours(diseased_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(
+        diseased_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
 
     bounding_boxes = []
     annotated = img_bgr.copy()
@@ -105,13 +111,15 @@ def analyze_image(image_path: str, output_path: str) -> dict:
         if area < MIN_CONTOUR_AREA:
             continue
         x, y, w, h = cv2.boundingRect(cnt)
-        bounding_boxes.append({
-            "x": int(x),
-            "y": int(y),
-            "w": int(w),
-            "h": int(h),
-            "area_px": int(area),
-        })
+        bounding_boxes.append(
+            {
+                "x": int(x),
+                "y": int(y),
+                "w": int(w),
+                "h": int(h),
+                "area_px": int(area),
+            }
+        )
         cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
     cv2.imwrite(output_path, annotated)

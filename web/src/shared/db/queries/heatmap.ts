@@ -1,6 +1,6 @@
-import { count, sql, eq } from "drizzle-orm";
-import { analyses, farms, fields } from "../schema";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../client";
+import { analyses, farms, fields } from "../schema";
 
 export type HeatmapRow = {
   farmId: string;

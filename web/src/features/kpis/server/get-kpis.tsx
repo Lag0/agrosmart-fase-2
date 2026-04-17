@@ -1,8 +1,8 @@
 import "server-only";
+import { SectionCards } from "@/components/section-cards-agro";
 import { getKpis } from "@/shared/db/queries/kpis";
-import { KpiRow } from "../components/kpi-row";
 
-export async function KpiRowServer() {
+export async function KpiCardsServer() {
   const data = await getKpis();
-  return <KpiRow data={data} />;
+  return <SectionCards data={data} />;
 }

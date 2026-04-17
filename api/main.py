@@ -10,12 +10,11 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from analysis import analyze_image
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pythonjsonlogger import jsonlogger
-
-from analysis import analyze_image
 from validation import ValidationError, error_response, validate_upload
 
 API_VERSION = "1.0.0"
@@ -29,11 +28,30 @@ logging.config.dictConfig(
     {
         "version": 1,
         "disable_existing_loggers": False,
-        "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json", "stream": "ext://sys.stdout"}},
-        "formatters": {"json": {"class": "pythonjsonlogger.json.JsonFormatter", "format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "json",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "formatters": {
+            "json": {
+                "class": "pythonjsonlogger.json.JsonFormatter",
+                "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+            }
+        },
         "loggers": {
-            "uvicorn.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
-            "uvicorn.error": {"level": "INFO", "handlers": ["console"], "propagate": False},
+            "uvicorn.access": {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
+            },
+            "uvicorn.error": {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
+            },
             "agrosmart": {"level": "INFO", "handlers": ["console"], "propagate": False},
         },
         "root": {"level": "WARNING", "handlers": ["console"]},
@@ -130,7 +148,9 @@ async def analyze(
 
     # Validate the upload (MIME, size, decode, dimensions)
     try:
-        pil_image, sniffed_mime = validate_upload(file_bytes, image.filename or "upload.jpg")
+        pil_image, sniffed_mime = validate_upload(
+            file_bytes, image.filename or "upload.jpg"
+        )
     except ValidationError as exc:
         return error_response(
             request_id=rid,

@@ -6,7 +6,7 @@ Painel de análise agregado para doenças em plantas. Consome imagens e classifi
 
 ## Contexto acadêmico
 
-**FIAP — Pós-Graduação em Engenharia de Agronomia**, disciplina PBL, Fase 2 (continuação). Critérios de avaliação: painel 40%, integração de dados 25%, vídeo 2–4 min 25%, organização 10%. Objetivo: demonstrar capacidade de persistência, visualização e consumo de um pipeline de visão computacional em produção.
+**FIAP — Pós-Graduação em Engenharia de Agronomia**, Fase 2 (continuação). Critérios de avaliação: painel 40%, integração de dados 25%, vídeo 2–4 min 25%, organização 10%. Objetivo: demonstrar capacidade de persistência, visualização e consumo de um pipeline de visão computacional em produção.
 
 ## Relação com a Fase 1
 
@@ -30,9 +30,9 @@ A Fase 1 é um script Python (`analise_plantas.py`) que lê imagens de uma pasta
     │ SQLite WAL  │              │ OpenRouter API  │
     │ (shared     │              │ (egress only)   │
     │  via Drizzle│              │ Gemini Flash    │
-    │ better-    │              │ Lite            │
-    │ sqlite3)   │              └─────────────────┘
-    └────────────┘
+    │ better-     │              │ Lite            │
+    │ sqlite3)    │              └─────────────────┘
+    └─────────────┘
          │
     ┌────▼──────────────────┐
     │ /data/uploads/        │
@@ -48,7 +48,7 @@ A Fase 1 é um script Python (`analise_plantas.py`) que lê imagens de uma pasta
 - **Web**: Next.js 16, React 19, TypeScript strict, Tailwind v4, shadcn/ui, TanStack Query (server via unstable_cache), Zustand (client).
 - **API**: FastAPI 0.120+, Python 3.12, OpenCV, Pillow, python-magic (MIME sniff), pydantic, python-json-logger.
 - **Database**: SQLite (WAL mode), Drizzle ORM, better-sqlite3 (Node driver).
-- **LLM**: Vercel AI SDK, OpenRouter, Gemini 2.5 Flash Lite.
+- **LLM**: Vercel AI SDK, OpenRouter, Gemini 3.1 Flash Lite.
 - **Infra**: Docker Compose (multi-stage), Caddy reverse proxy, Bun runtime.
 - **Observability**: pino (Node), uvicorn (FastAPI), in-memory metrics, audit trail (IP/UA hashed).
 

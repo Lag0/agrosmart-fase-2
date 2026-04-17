@@ -1,64 +1,79 @@
 import { Suspense } from "react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarInset } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FarmHeatmapServer } from "@/features/farm-heatmap/server/get-farm-heatmap";
-import { KpiRowServer } from "@/features/kpis/server/get-kpis";
-import { PestBreakdownServer } from "@/features/pest-breakdown/server/get-pest-breakdown";
+import { GalleryServer } from "@/features/gallery/server/get-gallery";
+import { KpiCardsServer } from "@/features/kpis/server/get-kpis";
+import { OverallAffectedServer } from "@/features/overall-affected/server/get-overall-affected";
+import { PestRadialServer } from "@/features/pest-breakdown/server/get-pest-radial";
 import { TimeSeriesServer } from "@/features/time-series/server/get-time-series";
 
-function CardSkeleton() {
-  return <Skeleton className="h-[250px] w-full rounded-xl" />;
+function KpiSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 @5xl/main:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton key={i} className="h-[120px] rounded-4xl" />
+      ))}
+    </div>
+  );
+}
+
+function ChartSkeleton() {
+  return <Skeleton className="h-[300px] w-full rounded-4xl" />;
+}
+
+function GallerySkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-3.5 w-52" />
+      </div>
+      <div className="flex gap-4 overflow-hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-[220px] w-[200px] shrink-0 rounded-4xl" />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function HomePage() {
   return (
     <SidebarInset>
-      <header className="flex h-16 shrink-0 items-center gap-2 px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4" />
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem className="hidden md:block">
-              <BreadcrumbLink href="/">AgroSmart</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator className="hidden md:block" />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Dashboard</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-      </header>
-      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <Suspense
-          fallback={
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 rounded-xl" />
-              ))}
-            </div>
-          }
-        >
-          <KpiRowServer />
+      <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+        {/* KPIs */}
+        <Suspense fallback={<KpiSkeleton />}>
+          <KpiCardsServer />
         </Suspense>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Suspense fallback={<CardSkeleton />}>
-            <TimeSeriesServer />
-          </Suspense>
-          <Suspense fallback={<CardSkeleton />}>
-            <PestBreakdownServer />
-          </Suspense>
-        </div>
-        <Suspense fallback={<CardSkeleton />}>
+
+        {/* Evolução temporal */}
+        <Suspense fallback={<ChartSkeleton />}>
+          <TimeSeriesServer />
+        </Suspense>
+
+        {/* Mapa de calor */}
+        <Suspense fallback={<ChartSkeleton />}>
           <FarmHeatmapServer />
+        </Suspense>
+
+        {/* Distribuição por praga + Índice geral */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
+          <div className="lg:col-span-4">
+            <Suspense fallback={<ChartSkeleton />}>
+              <PestRadialServer />
+            </Suspense>
+          </div>
+          <div className="h-full lg:col-span-3">
+            <Suspense fallback={<ChartSkeleton />}>
+              <OverallAffectedServer />
+            </Suspense>
+          </div>
+        </div>
+
+        {/* Análises recentes */}
+        <Suspense fallback={<GallerySkeleton />}>
+          <GalleryServer />
         </Suspense>
       </div>
     </SidebarInset>

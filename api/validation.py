@@ -4,8 +4,8 @@ import tempfile
 from pathlib import Path
 
 import magic
-from PIL import Image
 from fastapi.responses import JSONResponse
+from PIL import Image
 
 ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
 MAX_BYTES = 8 * 1024 * 1024  # 8 MiB
@@ -73,7 +73,9 @@ def validate_upload(file_bytes: bytes, filename: str) -> tuple:
         )
 
     # 3. Decode validation — write to temp, verify, then load
-    with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix or ".jpg", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        suffix=Path(filename).suffix or ".jpg", delete=False
+    ) as tmp:
         tmp_path = tmp.name
         tmp.write(file_bytes)
 

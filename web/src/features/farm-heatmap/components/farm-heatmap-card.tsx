@@ -1,73 +1,166 @@
 "use client";
 
+import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts";
+
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import type { HeatmapRow } from "@/shared/db/queries/heatmap";
 
 interface FarmHeatmapCardProps {
   data: HeatmapRow[];
 }
 
-export function FarmHeatmapCard({ data }: FarmHeatmapCardProps) {
-  const maxAffected = Math.max(...data.map((r) => r.avgAffected), 1);
+const FARM_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
-  function severityColor(value: number): string {
-    const ratio = value / maxAffected;
-    if (ratio < 0.3) return "var(--chart-1)";
-    if (ratio < 0.6) return "var(--chart-2)";
-    return "var(--destructive)";
-  }
+function severityBadge(value: number): string {
+  if (value < 30) return "🟢";
+  if (value < 60) return "🟡";
+  return "🔴";
+}
+
+function abbreviateFieldName(fieldName: string): string {
+  const match = fieldName.match(/talh[aã]o\s*(\d+)/i);
+  if (match) return `T${match[1]}`;
+  return fieldName;
+}
+
+export function FarmHeatmapCard({ data }: FarmHeatmapCardProps) {
+  // Unique farms in data order, assign colors
+  const farmIds = [...new Set(data.map((r) => r.farmId))];
+  const farmMeta = new Map<string, { name: string; color: string }>();
+  farmIds.forEach((id, i) => {
+    const row = data.find((r) => r.farmId === id);
+    if (row) {
+      farmMeta.set(id, {
+        name: row.farmName,
+        color: FARM_COLORS[i % FARM_COLORS.length],
+      });
+    }
+  });
+
+  const chartConfig = {
+    avgAffected: {
+      label: "Afetação média",
+      color: "var(--chart-1)",
+    },
+  } satisfies ChartConfig;
+
+  // Group by farm, preserving farm order and field order.
+  // Show up to 3 fields per farm for readability.
+  const flat = farmIds.flatMap((farmId) =>
+    data.filter((r) => r.farmId === farmId).slice(0, 3),
+  );
+
+  const chartData = flat.map((row) => {
+    const meta = farmMeta.get(row.farmId);
+    const farmShort = meta?.name.replace(/^Fazenda\s+/i, "") ?? "";
+    const fieldShort = abbreviateFieldName(row.fieldName);
+
+    return {
+      label: `${farmShort} · ${fieldShort}`,
+      fieldName: fieldShort,
+      farmId: row.farmId,
+      farmName: meta?.name ?? "",
+      avgAffected: row.avgAffected,
+      sampleCount: row.sampleCount,
+      fill: meta?.color ?? "var(--chart-1)",
+    };
+  });
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-heading text-base">
+        <CardTitle className="font-heading text-sm font-semibold tracking-tight">
           Mapa de calor por talhão
         </CardTitle>
-        <CardDescription>Média de afetação nos últimos 30 dias</CardDescription>
+        <CardDescription>
+          Média de afetação nos últimos 30 dias
+        </CardDescription>
       </CardHeader>
-      <CardContent className="pt-0">
-        <div className="flex flex-col gap-3">
-          {data.map((farm) => (
-            <div key={farm.farmId} className="flex flex-col gap-1">
-              <span className="text-sm font-medium">{farm.farmName}</span>
-              <div className="flex flex-col gap-1 pl-4">
-                {data
-                  .filter((r) => r.farmId === farm.farmId)
-                  .map((field) => (
-                    <div
-                      key={field.fieldId}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <span className="text-muted-foreground w-28 truncate">
-                        {field.fieldName}
-                      </span>
-                      <div className="flex-1">
-                        <div
-                          className="h-5 rounded"
-                          style={{
-                            width: `${Math.min((field.avgAffected / maxAffected) * 100, 100)}%`,
-                            backgroundColor: severityColor(field.avgAffected),
-                            minWidth: "4px",
-                            opacity: 0.85,
-                          }}
-                        />
-                      </div>
-                      <span className="w-14 text-right tabular-nums">
-                        {field.avgAffected}%
-                      </span>
+      <CardContent>
+        <ChartContainer config={chartConfig} className="aspect-auto h-[320px] w-full">
+          <BarChart
+            accessibilityLayer
+            data={chartData}
+            layout="vertical"
+            margin={{ left: 0 }}
+          >
+            <YAxis
+              dataKey="label"
+              type="category"
+              tickLine={false}
+              tickMargin={10}
+              axisLine={false}
+              width={90}
+              tick={{ fontSize: 12 }}
+              interval={0}
+            />
+            <XAxis dataKey="avgAffected" type="number" hide />
+            <ChartTooltip
+              cursor={false}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0].payload;
+                const meta = farmMeta.get(d.farmId);
+                return (
+                  <div className="rounded-lg border bg-background p-3 text-sm shadow-md">
+                    <div className="flex items-center gap-2 font-medium">
+                      <span
+                        className="inline-block size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: d.fill ?? meta?.color }}
+                      />
+                      {d.farmName || meta?.name}
                     </div>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
+                    <p className="text-muted-foreground mt-1">
+                      {d.fieldName ?? d.label} · {severityBadge(d.avgAffected)} {d.avgAffected}% · {d.sampleCount} amost.
+                    </p>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="avgAffected" radius={4}>
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ChartContainer>
       </CardContent>
+      <CardFooter className="flex flex-col gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {farmIds.map((farmId) => {
+            const meta = farmMeta.get(farmId);
+            if (!meta) return null;
+            return (
+              <div key={farmId} className="flex items-center gap-1.5">
+                <span
+                  className="inline-block size-2.5 rounded-full"
+                  style={{ backgroundColor: meta.color }}
+                />
+                <span className="text-muted-foreground">{meta.name}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+          <span>🟢 &lt; 30% controlado</span>
+          <span>🟡 30–60% atenção</span>
+          <span>🔴 &gt; 60% crítico</span>
+        </div>
+      </CardFooter>
     </Card>
   );
 }
