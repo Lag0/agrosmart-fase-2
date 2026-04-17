@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { RiImageLine } from "@remixicon/react";
 import {
   Card,
   CardContent,
@@ -8,6 +9,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { GalleryItem } from "@/shared/db/queries/gallery";
+import { thumbnailUrl } from "@/features/gallery/lib/image-paths";
 
 const PEST_LABELS: Record<string, string> = {
   ferrugem: "Ferrugem",
@@ -84,13 +86,22 @@ export function GalleryStrip({ items }: GalleryStripProps) {
             <Card className="w-[200px] overflow-hidden rounded-3xl transition-all duration-300 hover:shadow-md hover:-translate-y-1">
               <div
                 className={cn(
-                  "aspect-[4/3] flex items-center justify-center border-l-4 transition-colors",
+                  "aspect-[4/3] overflow-hidden border-l-4 transition-colors",
                   severityColor(item.severity),
                 )}
               >
-                <span className="text-muted-foreground/40 text-3xl font-light">
-                  #
-                </span>
+                {item.thumbnailPath ? (
+                  <img
+                    src={thumbnailUrl(item.imageSha256)}
+                    alt={PEST_LABELS[item.pestType] ?? item.pestType}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-muted">
+                    <RiImageLine className="size-8 text-muted-foreground/40" />
+                  </div>
+                )}
               </div>
               <CardContent className="flex flex-col gap-3 p-5">
                 <div className="flex items-center justify-between">
