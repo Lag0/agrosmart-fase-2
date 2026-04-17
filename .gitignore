@@ -16,3 +16,7 @@ api/.venv
 skills-lock.json
 .agents
 .claude
+
+# Python bytecode
+api/**/__pycache__
+api/**/*.pyc
