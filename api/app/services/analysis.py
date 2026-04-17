@@ -107,7 +107,7 @@ def analyze(image_path: str, output_path: str) -> dict:
     diseased_pixels = int(cv2.countNonZero(diseased_mask))
 
     # --- Affected percentage (of leaf area) ---
-    affected_pct = (diseased_pixels / leaf_pixels) * 100.0 if leaf_pixels > 0 else 0.0
+    affected_pct = min((diseased_pixels / leaf_pixels) * 100.0, 100.0) if leaf_pixels > 0 else 0.0
 
     severity = classify_severity(affected_pct)
 
