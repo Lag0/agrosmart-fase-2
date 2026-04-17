@@ -1,5 +1,4 @@
 import seedrandom from "seedrandom";
-import { eq } from "drizzle-orm";
 import { db, sqlite } from "./client";
 import { analyses, farms, fields } from "./schema";
 
