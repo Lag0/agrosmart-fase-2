@@ -1,0 +1,7 @@
+services:
+  web:
+    restart: unless-stopped
+  api:
+    restart: unless-stopped
+  caddy:
+    restart: unless-stopped
