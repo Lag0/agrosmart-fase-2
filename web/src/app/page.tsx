@@ -7,6 +7,7 @@ import { KpiCardsServer } from "@/features/kpis/server/get-kpis";
 import { OverallAffectedServer } from "@/features/overall-affected/server/get-overall-affected";
 import { PestRadialServer } from "@/features/pest-breakdown/server/get-pest-radial";
 import { TimeSeriesServer } from "@/features/time-series/server/get-time-series";
+import { GalleryStripSkeleton } from "@/features/gallery/components/gallery-strip";
 
 function KpiSkeleton() {
   return (
@@ -20,22 +21,6 @@ function KpiSkeleton() {
 
 function ChartSkeleton() {
   return <Skeleton className="h-[300px] w-full rounded-4xl" />;
-}
-
-function GallerySkeleton() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <Skeleton className="h-4 w-36" />
-        <Skeleton className="h-3.5 w-52" />
-      </div>
-      <div className="flex gap-4 overflow-hidden">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-[220px] w-[200px] shrink-0 rounded-4xl" />
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export default function HomePage() {
@@ -72,7 +57,7 @@ export default function HomePage() {
         </div>
 
         {/* Análises recentes */}
-        <Suspense fallback={<GallerySkeleton />}>
+        <Suspense fallback={<GalleryStripSkeleton />}>
           <GalleryServer />
         </Suspense>
       </div>
