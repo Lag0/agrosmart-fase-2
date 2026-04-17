@@ -20,6 +20,21 @@ import { UploadResultCard } from "./upload-result-card";
 const ACCEPTED_MIME = ["image/jpeg", "image/png", "image/webp", "image/bmp"];
 const ACCEPT_STRING = ACCEPTED_MIME.join(",");
 
+const EXT_MIME_MAP: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+};
+
+function guessMimeFromExtension(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  if (dot === -1) return "";
+  const ext = filename.slice(dot).toLowerCase();
+  return EXT_MIME_MAP[ext] ?? "";
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -36,7 +51,10 @@ export function UploadDropzone() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const applyFile = useCallback((candidate: File) => {
-    if (!ACCEPTED_MIME.includes(candidate.type)) {
+    // Some browsers don't set File.type on drag-and-drop (e.g. .webp → "")
+    const effectiveType =
+      candidate.type || guessMimeFromExtension(candidate.name);
+    if (!ACCEPTED_MIME.includes(effectiveType)) {
       toast.error(ERROR_COPY_PT.INVALID_MIME);
       return;
     }
