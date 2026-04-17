@@ -1,18 +1,26 @@
 """AgroSmart Phase 3 — FastAPI analysis service."""
 
+import asyncio
 import logging
 import logging.config
+import os
+import shutil
 import sys
+import tempfile
 import uuid
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pythonjsonlogger import jsonlogger
 
+from analysis import analyze_image
 from validation import ValidationError, error_response, validate_upload
 
 API_VERSION = "1.0.0"
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "/data/uploads")
+ANALYSIS_TIMEOUT_S = 10
 
 # ---------------------------------------------------------------------------
 # Structured JSON logging
@@ -69,6 +77,15 @@ def _get_request_id(request: Request) -> str:
     return str(uuid.uuid4())
 
 
+def _ensure_dirs(request_id: str):
+    """Ensure upload directories exist."""
+    original_dir = Path(UPLOADS_DIR) / "original"
+    annotated_dir = Path(UPLOADS_DIR) / "annotated"
+    original_dir.mkdir(parents=True, exist_ok=True)
+    annotated_dir.mkdir(parents=True, exist_ok=True)
+    return original_dir, annotated_dir
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -97,8 +114,7 @@ async def analyze(
             status=400,
         )
 
-    # Reject non-multipart (FastAPI handles content-type at framework level,
-    # but we guard against application/json explicitly)
+    # Reject non-multipart
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" not in content_type:
         return error_response(
@@ -112,7 +128,7 @@ async def analyze(
     # Read image bytes
     file_bytes = await image.read()
 
-    # Validate the upload
+    # Validate the upload (MIME, size, decode, dimensions)
     try:
         pil_image, sniffed_mime = validate_upload(file_bytes, image.filename or "upload.jpg")
     except ValidationError as exc:
@@ -135,18 +151,93 @@ async def analyze(
         },
     )
 
-    # Placeholder response — real analysis logic comes in Task 11
-    return JSONResponse(
-        status_code=200,
-        content={
-            "request_id": rid,
-            "severity": "healthy",
-            "severity_label_pt": "Planta saudavel",
-            "affected_pct": 0.0,
-            "leaf_pixels": 0,
-            "diseased_pixels": 0,
-            "bounding_boxes": [],
-            "processing_ms": 0.0,
-            "api_version": API_VERSION,
-        },
-    )
+    # Determine file extension from sniffed MIME
+    ext_map = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/bmp": ".bmp",
+    }
+    ext = ext_map.get(sniffed_mime, ".jpg")
+
+    # Ensure directories exist
+    original_dir, annotated_dir = _ensure_dirs(request_id)
+
+    original_path = original_dir / f"{request_id}{ext}"
+    annotated_path = annotated_dir / f"{request_id}{ext}"
+
+    # Write original image to shared volume
+    tmp_fd = None
+    tmp_path = None
+    try:
+        # Write to temp file first (atomic-ish), then the volume path
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=ext)
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(file_bytes)
+        tmp_fd = None  # os.fdopen took ownership
+
+        shutil.move(tmp_path, str(original_path))
+        tmp_path = None
+
+        # Run OpenCV analysis in a thread with timeout
+        def _run_analysis():
+            return analyze_image(str(original_path), str(annotated_path))
+
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_run_analysis),
+            timeout=ANALYSIS_TIMEOUT_S,
+        )
+
+    except asyncio.TimeoutError:
+        logger.error(
+            "analysis timed out",
+            extra={"request_id": rid},
+        )
+        return error_response(
+            request_id=rid,
+            code="TIMEOUT",
+            message_en="Analysis timed out.",
+            message_pt="A analise demorou demais.",
+            status=500,
+        )
+    except Exception as exc:
+        logger.error(
+            "analysis failed",
+            extra={"request_id": rid, "err": str(exc)},
+        )
+        return error_response(
+            request_id=rid,
+            code="INTERNAL",
+            message_en="Internal server error during analysis.",
+            message_pt="Erro interno do servidor durante a analise.",
+            status=500,
+        )
+    finally:
+        # Clean up any temp file
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    # Build response
+    response: dict = {
+        "request_id": request_id,
+        "severity": result["severity"],
+        "severity_label_pt": result["severity_label_pt"],
+        "affected_pct": result["affected_pct"],
+        "leaf_pixels": result["leaf_pixels"],
+        "diseased_pixels": result["diseased_pixels"],
+        "bounding_boxes": result["bounding_boxes"],
+        "processing_ms": result["processing_ms"],
+        "api_version": API_VERSION,
+    }
+
+    # Handle NO_LEAF_DETECTED warning
+    if result["leaf_pixels"] == 0:
+        response["warnings"] = ["NO_LEAF_DETECTED"]
+
+    # TODO(decouple): Currently writes annotated image to shared volume.
+    # Future migration to base64 return is a ~30-line change on both sides.
+
+    return JSONResponse(status_code=200, content=response)
