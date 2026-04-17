@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import analysis as analysis_router
+from app.api.routes import classify as classify_router
 from app.api.routes import health as health_router
 from app.config import get_settings
 from app.core.logging import configure_logging
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router.router)
     app.include_router(analysis_router.router)
+    app.include_router(classify_router.router)
 
     return app
 
