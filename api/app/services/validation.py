@@ -51,6 +51,8 @@ def validate_upload(file_bytes: bytes, filename: str) -> tuple[Image.Image, str]
     # 2. MIME sniff via python-magic (reads from buffer — no disk I/O)
     sniffed_mime = magic.from_buffer(file_bytes, mime=True)
     if sniffed_mime not in ALLOWED_MIME:
+        sniffed_mime = _sniff_mime_from_header(file_bytes)
+    if sniffed_mime not in ALLOWED_MIME:
         raise ValidationError(
             status=415,
             code="INVALID_MIME",
@@ -110,3 +112,20 @@ def _check_decode(file_bytes: bytes) -> Image.Image:
             message_en="Could not decode the image.",
             message_pt="Não foi possível decodificar a imagem.",
         ) from exc
+
+
+def _sniff_mime_from_header(data: bytes) -> str:
+    """Fallback MIME detection from file header bytes.
+
+    Used when python-magic returns a generic type (e.g. "application/octet-stream"
+    on macOS for WebP) because the system libmagic database is incomplete.
+    """
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:2] in (b"\xff\xd8", b"\xff\xe0", b"\xff\xe1"):
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:2] == b"BM":
+        return "image/bmp"
+    return ""
