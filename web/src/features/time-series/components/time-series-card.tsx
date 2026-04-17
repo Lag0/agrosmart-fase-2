@@ -16,9 +16,9 @@ interface TimeSeriesChartProps {
 }
 
 const SEVERITY_COLORS = {
-  healthy: "#22c55e",
-  beginning: "#f59e0b",
-  diseased: "#ef4444",
+  healthy: "var(--chart-1)",
+  beginning: "var(--chart-2)",
+  diseased: "var(--destructive)",
 } as const;
 
 export function TimeSeriesChart({ data }: TimeSeriesChartProps) {

@@ -1,8 +1,10 @@
 import "./globals.css";
 import { DM_Sans, Merriweather } from "next/font/google";
 import type { ReactNode } from "react";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import AppShell from "@/shared/components/layout/app-shell";
 
 const merriweatherHeading = Merriweather({
   subsets: ["latin"],
@@ -18,7 +20,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={cn("font-sans", dmSans.variable, merriweatherHeading.variable)}
     >
       <body>
-        <AppShell>{children}</AppShell>
+        <TooltipProvider>
+          <SidebarProvider>
+            <AppSidebar />
+            {children}
+          </SidebarProvider>
+        </TooltipProvider>
       </body>
     </html>
   );
