@@ -5,8 +5,8 @@ export default function HomePage() {
         <span className="eyebrow">AgroSmart Fase 2</span>
         <h1>Dashboard scaffold ready</h1>
         <p>
-          This placeholder page confirms the Next.js app is running and ready for the
-          production dashboard, upload flow, and analysis features.
+          This placeholder page confirms the Next.js app is running and ready
+          for the production dashboard, upload flow, and analysis features.
         </p>
         <div className="link-row">
           <a href="/upload">Upload</a>

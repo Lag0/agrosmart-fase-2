@@ -6,7 +6,9 @@ export const metadata: Metadata = {
   description: "Plant health dashboard and analysis workflow",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
       <body>{children}</body>

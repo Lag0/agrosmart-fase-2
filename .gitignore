@@ -8,6 +8,7 @@ data/*
 *.db
 *.db-wal
 *.db-shm
+*.tsbuildinfo
 web/node_modules
 web/.next
 api/__pycache__

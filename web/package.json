@@ -10,10 +10,10 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun run src/shared/db/migrate.ts",
+    "db:migrate": "tsx src/shared/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "seed": "bun run src/shared/db/seed.ts",
-    "sweep:orphans": "bun run scripts/sweep-orphans.ts"
+    "seed": "tsx src/shared/db/seed.ts",
+    "sweep:orphans": "tsx scripts/sweep-orphans.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
@@ -29,6 +29,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "drizzle-kit": "^0.31.4",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }

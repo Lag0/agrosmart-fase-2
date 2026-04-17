@@ -1,4 +1,11 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const farms = sqliteTable(
   "farms",
@@ -78,7 +85,9 @@ export const recommendations = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => ({
-    recommendationsAnalysisIdx: index("recommendations_analysis_idx").on(table.analysisId),
+    recommendationsAnalysisIdx: index("recommendations_analysis_idx").on(
+      table.analysisId,
+    ),
   }),
 );
 
