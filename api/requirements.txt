@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+opencv-python-headless
+pillow
+python-magic
+python-json-logger
+numpy
