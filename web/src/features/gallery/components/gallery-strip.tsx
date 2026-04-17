@@ -67,7 +67,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h3 className="text-lg font-semibold tracking-tight">
+        <h3 className="font-heading text-lg font-semibold tracking-tight">
           Análises recentes
         </h3>
         <p className="text-muted-foreground text-sm">
@@ -81,20 +81,30 @@ export function GalleryStrip({ items }: GalleryStripProps) {
             href={`/analyses/${item.id}`}
             className="group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-3xl"
           >
-            <Card className="w-[200px] overflow-hidden rounded-3xl transition-all duration-300 hover:shadow-md hover:-translate-y-1">
-              <div
-                className={cn(
-                  "aspect-[4/3] flex items-center justify-center border-l-4 transition-colors",
-                  severityColor(item.severity),
+            <Card className="w-[200px] overflow-hidden rounded-3xl border border-black/5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md dark:border-white/10">
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                {item.thumbnailPath || item.imageSha256 ? (
+                  <img
+                    src={item.thumbnailPath ?? `/api/images/${item.imageSha256}`}
+                    alt={PEST_LABELS[item.pestType] ?? item.pestType}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "flex h-full w-full items-center justify-center transition-colors",
+                      severityColor(item.severity),
+                    )}
+                  >
+                    <span className="text-muted-foreground/40 text-3xl font-light">
+                      #
+                    </span>
+                  </div>
                 )}
-              >
-                <span className="text-muted-foreground/40 text-3xl font-light">
-                  #
-                </span>
               </div>
               <CardContent className="flex flex-col gap-3 p-5">
                 <div className="flex items-center justify-between">
-                  <span className="truncate text-base font-medium">
+                  <span className="font-heading truncate text-base font-semibold">
                     {PEST_LABELS[item.pestType] ?? item.pestType}
                   </span>
                   <span
@@ -105,7 +115,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                   />
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-semibold tabular-nums tracking-tight">
+                  <span className="font-heading tabular-nums text-2xl font-bold tracking-tight">
                     {item.affectedPct.toFixed(1)}%
                   </span>
                   <span className="text-muted-foreground text-sm font-medium">
