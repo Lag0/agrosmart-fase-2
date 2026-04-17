@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KpiRowServer } from "@/features/kpis/server/get-kpis";
 import {
   CardSection,
   DashboardShell,
@@ -20,7 +21,7 @@ export default function HomePage() {
   return (
     <DashboardShell>
       <Suspense fallback={<KpiSkeleton />}>
-        <KpiPlaceholder />
+        <KpiRowServer />
       </Suspense>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <CardSection title="Evolução temporal">
@@ -34,26 +35,5 @@ export default function HomePage() {
         <Skeleton className="h-48" />
       </CardSection>
     </DashboardShell>
-  );
-}
-
-function KpiPlaceholder() {
-  return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-      {[
-        { label: "Total de análises", value: "—" },
-        { label: "Saudáveis", value: "—" },
-        { label: "Doentes", value: "—" },
-        { label: "Tipos de praga", value: "—" },
-      ].map((kpi) => (
-        <div
-          key={kpi.label}
-          className="bg-card border-border rounded-lg border p-4"
-        >
-          <p className="text-muted-foreground text-xs">{kpi.label}</p>
-          <p className="text-2xl font-bold">{kpi.value}</p>
-        </div>
-      ))}
-    </div>
   );
 }
