@@ -6,7 +6,7 @@ import {
   RiLoaderLine,
   RiUploadCloud2Line,
 } from "@remixicon/react";
-import { type ChangeEvent, type DragEvent, useCallback, useState } from "react";
+import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -237,53 +237,77 @@ export function UploadDropzone() {
   const [pestType, setPestType] = useState<PestTypeValue>("nao_identificado");
   const [selectionError, setSelectionError] = useState<string | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const applyFile = useCallback(async (candidate: File) => {
-    const normalized = await normalizeUploadFile(candidate);
-    if (!normalized) {
-      const message =
-        "Não foi possível converter a imagem HEIC. Tente JPEG/PNG.";
+    try {
+      const normalized = await normalizeUploadFile(candidate);
+      if (!normalized) {
+        const message =
+          "Não foi possível converter a imagem HEIC. Tente JPEG/PNG.";
+        setSelectionError(message);
+        toast.error(message);
+        return;
+      }
+
+      const finalFile = await fitFileToConstraints(normalized);
+      if (!finalFile) {
+        const message =
+          "Imagem muito grande para upload. Use uma versão menor (até 8 MB).";
+        setSelectionError(message);
+        toast.error(message);
+        return;
+      }
+
+      const effectiveType = resolveEffectiveMime(finalFile);
+      if (!isAcceptedMime(effectiveType)) {
+        const message = `${ERROR_COPY_PT.INVALID_MIME} (tipo detectado: ${finalFile.type || "desconhecido"})`;
+        setSelectionError(message);
+        toast.error(message);
+        return;
+      }
+
+      // Revoke previous preview to avoid memory leak
+      setPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(finalFile);
+      });
+      setSelectionError(null);
+      setFile(finalFile);
+      setResult(null);
+    } catch {
+      const message = "Erro ao processar imagem. Tente novamente.";
       setSelectionError(message);
       toast.error(message);
-      return;
     }
-
-    const finalFile = await fitFileToConstraints(normalized);
-    if (!finalFile) {
-      const message =
-        "Imagem muito grande para upload. Use uma versão menor (até 8 MB).";
-      setSelectionError(message);
-      toast.error(message);
-      return;
-    }
-
-    const effectiveType = resolveEffectiveMime(finalFile);
-    if (!isAcceptedMime(effectiveType)) {
-      const message = `${ERROR_COPY_PT.INVALID_MIME} (tipo detectado: ${finalFile.type || "desconhecido"})`;
-      setSelectionError(message);
-      toast.error(message);
-      return;
-    }
-
-    // Revoke previous preview to avoid memory leak
-    setPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(finalFile);
-    });
-    setSelectionError(null);
-    setFile(finalFile);
-    setResult(null);
   }, []);
 
   const handleFileChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
+    async (e: ChangeEvent<HTMLInputElement>) => {
       const selected = e.target.files?.[0];
-      if (selected) {
-        void applyFile(selected);
+      try {
+        if (selected) {
+          await applyFile(selected);
+        }
+      } finally {
+        // Reset after async completes — avoids iOS Safari invalidating
+        // the File object when the input is cleared mid-processing
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
-      // Reset input so the same file can be re-selected
-      e.target.value = "";
     },
     [applyFile],
+  );
+
+  // iOS Safari doesn't reliably activate <input type="file"> via implicit
+  // label-click — trigger programmatically for cross-browser consistency
+  const handleLabelClick = useCallback(
+    (e: React.MouseEvent<HTMLLabelElement>) => {
+      if (isSubmitting) return;
+      if ((e.target as HTMLElement).closest("button")) return;
+      e.preventDefault();
+      fileInputRef.current?.click();
+    },
+    [isSubmitting],
   );
 
   const handleDrop = useCallback(
@@ -371,6 +395,7 @@ export function UploadDropzone() {
       <label
         aria-label="Área de upload de imagem"
         aria-disabled={isSubmitting}
+        onClick={handleLabelClick}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -384,12 +409,12 @@ export function UploadDropzone() {
         )}
       >
         <input
+          ref={fileInputRef}
           type="file"
           accept={ACCEPT_STRING}
           className="sr-only"
           onChange={handleFileChange}
           disabled={isSubmitting}
-          aria-hidden="true"
           tabIndex={-1}
         />
 
