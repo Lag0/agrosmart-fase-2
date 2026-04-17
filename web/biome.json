@@ -6,8 +6,19 @@
       "!**/.next",
       "!**/.next",
       "!**/node_modules",
-      "!**/node_modules"
+      "!**/node_modules",
+      "!**/.agents",
+      "!**/.agents",
+      "!**/.pi",
+      "!**/.pi",
+      "!**/.claude",
+      "!**/.claude"
     ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "formatter": {
     "enabled": true,
