@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build the approved AgroSmart Fase 2 product: a Next.js dashboard backed by FastAPI image analysis, SQLite persistence, upload/dedup flows, LLM recommendations, PDF export, and Docker-based deployment.
+**Goal:** Build the approved AgroSmart Fase 2 product: a Next.js dashboard backed by a dual-analysis FastAPI microservice (HSV severity + VLM pest classification via OpenRouter), SQLite persistence, upload/dedup with parallel API calls, LLM recommendations, CSV/JSON export, PDF report, and Docker-based deployment.
 
-**Architecture:** Keep the web app as the only SQLite writer, and keep the FastAPI service stateless except for writing annotated images to the shared `/data/uploads` volume. Build the project in vertical slices so each phase ends in something demoable: scaffold and schema first, then read-path dashboard, then analysis API, then upload flow, then resilience/observability, then LLM/reporting, then deployment polish.
+**Architecture:** Keep the web app as the only SQLite writer. The FastAPI service is the unified AI microservice — it performs HSV-based severity analysis (Phase 3) and VLM-based pest classification via OpenRouter (Phase 3.5). Both are called in parallel from the upload action (Phase 4.5). The API writes annotated images to the shared `/data/uploads` volume and has outbound access to OpenRouter only (ADR-001). Build in vertical slices: scaffold → dashboard → HSV analysis → VLM classification → upload flow → resilience → LLM/reporting → export → deployment → academic deliverables.
 
 **Tech Stack:** Next.js 16, React 19, TypeScript strict, Tailwind v4, shadcn/ui, Drizzle ORM, better-sqlite3, Bun, FastAPI, Python 3.12, OpenCV, Pillow, python-magic, Vercel AI SDK, OpenRouter, Caddy, Docker Compose.
 
@@ -14,7 +14,7 @@
 
 - This plan follows the approved design spec at `docs/superpowers/specs/2026-04-17-agrosmart-fase-2-design.md`.
 - The approved scope explicitly excludes automated unit/E2E tests for MVP. Because of that, this plan uses **verification-first steps** (`lint`, typecheck, migrations, health checks, curl checks, smoke script, and manual route validation) instead of adding automated test suites.
-- Keep all YAGNI boundaries from the spec: no auth, no multi-tenant, no CV pest classification, no dark mode, no Framer Motion.
+- Keep all YAGNI boundaries from the spec: no auth, no multi-tenant, no dark mode, no Framer Motion. Note: "no CV pest classification" was relaxed via ADR-001 — we now use VLM (Gemini via OpenRouter) for pest type classification, not a CNN.
 - Prefer small commits after each task.
 - Before implementation starts, mirror the exact directory tree described in the spec.
 
@@ -858,6 +858,369 @@ git commit -m "feat: containerize FastAPI service"
 
 ---
 
+## Phase 3.5 — VLM pest classification microservice
+
+> **ADR:** This phase relaxes the original "api has NO egress" constraint to allow outbound calls to OpenRouter for VLM-based pest classification. See `docs/adr/001-api-egress-for-vlm.md` for the full decision record.
+
+### Task 27: Add OpenRouter client and VLM classification service
+
+**Files:**
+- Create: `api/app/services/classification.py`
+- Modify: `api/requirements.txt`
+- Modify: `api/app/core/config.py`
+
+**Step 1: Add `httpx` to pinned dependencies**
+
+Add `httpx==0.28.1` to `api/requirements.txt`.
+
+**Step 2: Extend Pydantic Settings with VLM config**
+
+Add to `api/app/core/config.py`:
+
+```python
+openrouter_api_key: str = ""
+openrouter_model: str = "google/gemini-2.5-flash-lite-preview:thinking"
+classify_timeout_s: int = 10
+classify_max_tokens: int = 300
+cache_ttl_s: int = 3600
+```
+
+**Step 3: Implement the classification service**
+
+Create `api/app/services/classification.py`:
+
+```python
+import base64
+import json
+import logging
+import re
+import time
+from dataclasses import dataclass
+
+import httpx
+
+from api.app.core.config import Settings
+
+logger = logging.getLogger(__name__)
+
+PEST_TYPES = ["nao_identificado", "ferrugem", "mancha_parda", "oidio", "lagarta"]
+
+SYSTEM_PROMPT = """Você é um agrônomo especialista em fitopatologia. Analise a imagem da folha e classifique o tipo de praga ou doença.
+
+Responda SOMENTE em JSON válido (sem markdown, sem code fences):
+{
+  "pest_type": "ferrugem|mancha_parda|oidio|lagarta|nao_identificado",
+  "confidence": 0.0 a 1.0,
+  "reasoning": "Explicação curta em português (1-2 frases)",
+  "alternatives": [{"type": "...", "confidence": 0.0}]
+}
+
+Tipos aceitos: ferrugem, mancha_parda, oidio, lagarta, nao_identificado
+Se a folha parecer saudável ou sem sinais claros, use "nao_identificado"."""
+
+
+@dataclass
+class ClassificationResult:
+    pest_type: str
+    confidence: float
+    reasoning: str
+    alternatives: list[dict]
+    model: str
+
+
+_cache: dict[str, tuple[ClassificationResult, float]] = {}
+
+
+def _get_cached(sha256: str, ttl: int) -> ClassificationResult | None:
+    if sha256 in _cache:
+        result, ts = _cache[sha256]
+        if time.time() - ts < ttl:
+            return result
+    return None
+
+
+def _set_cached(sha256: str, result: ClassificationResult) -> None:
+    _cache[sha256] = (result, time.time())
+
+
+def _parse_json_response(text: str) -> dict:
+    text = text.strip()
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if match:
+        text = match.group(1).strip()
+    return json.loads(text)
+
+
+async def classify_image(
+    image_bytes: bytes,
+    sha256: str | None = None,
+    settings: Settings | None = None,
+) -> ClassificationResult:
+    settings = settings or Settings()
+
+    if sha256:
+        cached = _get_cached(sha256, settings.cache_ttl_s)
+        if cached:
+            return cached
+
+    if not settings.openrouter_api_key:
+        result = ClassificationResult(
+            pest_type="nao_identificado",
+            confidence=0.0,
+            reasoning="Chave API não configurada. Selecione manualmente.",
+            alternatives=[],
+            model="fallback",
+        )
+        if sha256:
+            _set_cached(sha256, result)
+        return result
+
+    b64 = base64.b64encode(image_bytes).decode()
+    payload = {
+        "model": settings.openrouter_model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Classifique esta imagem de folha:"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    },
+                ],
+            },
+        ],
+        "max_tokens": settings.classify_max_tokens,
+        "temperature": 0.1,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.classify_timeout_s) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+
+        content = resp.json()["choices"][0]["message"]["content"]
+        data = _parse_json_response(content)
+
+        result = ClassificationResult(
+            pest_type=data.get("pest_type", "nao_identificado"),
+            confidence=float(data.get("confidence", 0.0)),
+            reasoning=data.get("reasoning", ""),
+            alternatives=data.get("alternatives", []),
+            model=settings.openrouter_model,
+        )
+    except Exception as e:
+        logger.warning("VLM classification failed: %s", e)
+        result = ClassificationResult(
+            pest_type="nao_identificado",
+            confidence=0.0,
+            reasoning="Classificação IA indisponível. Selecione manualmente.",
+            alternatives=[],
+            model="fallback",
+        )
+
+    if sha256:
+        _set_cached(sha256, result)
+    return result
+```
+
+**Step 4: Verify Python syntax**
+
+Run:
+
+```bash
+cd api && python -m py_compile app/services/classification.py
+```
+
+Expected: no syntax errors.
+
+**Step 5: Commit**
+
+```bash
+git add api/requirements.txt api/app/core/config.py api/app/services/classification.py
+git commit -m "feat: add VLM pest classification service via OpenRouter (Task 27)"
+```
+
+---
+
+### Task 28: Add POST /classify endpoint and response models
+
+**Files:**
+- Create: `api/app/models/classification.py`
+- Create: `api/app/api/routes/classify.py`
+- Modify: `api/app/main.py`
+
+**Step 1: Define classification response models**
+
+Create `api/app/models/classification.py`:
+
+```python
+from pydantic import BaseModel
+
+
+class AlternativeInfo(BaseModel):
+    type: str
+    confidence: float
+
+
+class ClassifyResponse(BaseModel):
+    pest_type: str
+    confidence: float
+    reasoning: str
+    alternatives: list[AlternativeInfo]
+    model: str
+```
+
+**Step 2: Implement the POST /classify route**
+
+Create `api/app/api/routes/classify.py`:
+
+```python
+from fastapi import APIRouter, File, Form, UploadFile
+
+from api.app.models.classification import ClassifyResponse
+from api.app.services.classification import classify_image
+from api.app.services.validation import validate_image
+
+router = APIRouter(tags=["classification"])
+
+
+@router.post("/classify", response_model=ClassifyResponse)
+async def classify(
+    image: UploadFile = File(...),
+    sha256: str = Form(None),
+):
+    image_bytes = await image.read()
+    validate_image(image_bytes, image.content_type)
+
+    result = await classify_image(image_bytes, sha256=sha256)
+
+    return ClassifyResponse(
+        pest_type=result.pest_type,
+        confidence=result.confidence,
+        reasoning=result.reasoning,
+        alternatives=result.alternatives,
+        model=result.model,
+    )
+```
+
+**Step 3: Register the router in main.py**
+
+Add `from api.app.api.routes.classify import router as classify_router` and `app.include_router(classify_router)`.
+
+**Step 4: Verify Python syntax**
+
+Run:
+
+```bash
+cd api && python -m py_compile app/models/classification.py app/api/routes/classify.py app/main.py
+```
+
+Expected: no errors.
+
+**Step 5: Commit**
+
+```bash
+git add api/app/models/classification.py api/app/api/routes/classify.py api/app/main.py
+git commit -m "feat: add POST /classify endpoint (Task 28)"
+```
+
+---
+
+### Task 29: Add Docker egress for OpenRouter and document ADR
+
+**Files:**
+- Modify: `docker-compose.yml`
+
+**Step 1: Update docker-compose.yml**
+
+In the `api` service definition, ensure it has access to both internal and public networks so it can reach OpenRouter:
+
+```yaml
+services:
+  api:
+    networks:
+      - internal
+      - public  # needed for OpenRouter egress (ADR-001)
+```
+
+**Step 2: Verify compose config**
+
+Run:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml config >/dev/null
+```
+
+Expected: valid config.
+
+**Step 3: Commit**
+
+```bash
+git add docker-compose.yml
+git commit -m "feat: allow API egress for OpenRouter (ADR-001) (Task 29)"
+```
+
+---
+
+### Task 30: Verify VLM classification end-to-end with curl
+
+**Files:** No new files — verification only.
+
+**Step 1: Start the API locally**
+
+Run:
+
+```bash
+cd api && OPENROUTER_API_KEY=sk-or-... uvicorn app.main:app --reload --port 8000
+```
+
+**Step 2: Test /classify with a real leaf image**
+
+Run:
+
+```bash
+curl -F "image=@test-leaf.jpg" http://localhost:8000/classify | python -m json.tool
+```
+
+Expected: JSON with `pest_type`, `confidence`, `reasoning`, and `model` fields.
+
+**Step 3: Test fallback without API key**
+
+Run:
+
+```bash
+OPENROUTER_API_KEY= uvicorn app.main:app --port 8001 &
+curl -F "image=@test-leaf.jpg" http://localhost:8001/classify | python -m json.tool
+kill %1
+```
+
+Expected: `pest_type: "nao_identificado"`, `confidence: 0.0`, `model: "fallback"`.
+
+**Step 4: Verify all Python files compile**
+
+Run:
+
+```bash
+cd api && find . -name "*.py" -path "./app/*" -exec python -m py_compile {} \;
+```
+
+Expected: no syntax errors.
+
+**Step 5: Commit (no changes expected)**
+
+If any fixes were needed during verification, commit them.
+
+---
+
 ## Phase 4 — Upload flow, dedup, and image serving
 
 ### Task 13: Add upload domain types, hashing, file-safe helpers, and error copy
@@ -1060,6 +1423,232 @@ Expected: valid hash returns 200, traversal attempt returns 400.
 ```bash
 git add web/src/app/api/images web/src/features/gallery/lib/image-paths.ts web/src/app/analyses/[id]/page.tsx web/src/features/gallery/components/gallery-strip.tsx
 git commit -m "feat: add secured image serving and analysis detail page"
+```
+
+---
+
+## Phase 4.5 — Wire VLM into upload flow
+
+### Task 31: Add VLM columns to analyses schema and migrate
+
+**Files:**
+- Modify: `web/src/shared/db/schema.ts`
+- Modify: `web/drizzle.config.ts`
+
+**Step 1: Add AI classification columns to analyses table**
+
+Add to the `analyses` table definition in `schema.ts`:
+
+```ts
+pestTypeAi: text("pest_type_ai"),
+pestTypeConfidence: real("pest_type_confidence"),
+pestTypeReasoning: text("pest_type_reasoning"),
+pestTypeModel: text("pest_type_model"),
+```
+
+**Step 2: Generate and apply migration**
+
+Run:
+
+```bash
+cd web
+bun run db:generate
+bun run db:migrate
+```
+
+Expected: migration file created and applied with the 4 new columns.
+
+**Step 3: Verify columns exist**
+
+Run:
+
+```bash
+sqlite3 ../data/agrosmart.db "PRAGMA table_info(analyses);"
+```
+
+Expected: `pest_type_ai`, `pest_type_confidence`, `pest_type_reasoning`, `pest_type_model` columns present.
+
+**Step 4: Commit**
+
+```bash
+git add web/src/shared/db/schema.ts web/drizzle
+git commit -m "feat: add VLM classification columns to analyses table (Task 31)"
+```
+
+---
+
+### Task 32: Update upload action to call /analyze and /classify in parallel
+
+**Files:**
+- Modify: `web/src/features/upload/actions/upload-image.ts`
+
+**Step 1: Add parallel API calls**
+
+In the upload action, after saving the original file and generating the thumbnail, call both endpoints concurrently:
+
+```ts
+const formAnalyze = new FormData();
+formAnalyze.append("image", new Blob([fileBuffer]), fileName);
+formAnalyze.append("request_id", requestId);
+
+const formClassify = new FormData();
+formClassify.append("image", new Blob([fileBuffer]), fileName);
+formClassify.append("sha256", sha256Hex);
+
+const [analysisRes, classifyRes] = await Promise.all([
+  fetch(`${env.API_BASE_URL}/analyze`, {
+    method: "POST",
+    body: formAnalyze,
+  }),
+  fetch(`${env.API_BASE_URL}/classify`, {
+    method: "POST",
+    body: formClassify,
+  }),
+]);
+
+// Parse analysis response (existing logic — throws on non-2xx)
+const analysis = await analysisRes.json();
+
+// Parse classification response (graceful fallback — never throws)
+let classification: ClassifyResponse | null = null;
+try {
+  if (classifyRes.ok) {
+    classification = await classifyRes.json();
+  }
+} catch {
+  // VLM unavailable — not blocking
+}
+```
+
+**Step 2: Store VLM results in the DB insert**
+
+Add the AI fields to the `insert(analyses)` call:
+
+```ts
+pestTypeAi: classification?.pest_type ?? null,
+pestTypeConfidence: classification?.confidence ?? null,
+pestTypeReasoning: classification?.reasoning ?? null,
+pestTypeModel: classification?.model ?? null,
+```
+
+**Step 3: Update the ActionResult return type**
+
+Add the VLM fields to the return type so the UI can display them:
+
+```ts
+pestTypeAi: classification?.pest_type ?? null,
+pestTypeConfidence: classification?.confidence ?? null,
+pestTypeReasoning: classification?.reasoning ?? null,
+pestTypeModel: classification?.model ?? null,
+```
+
+**Step 4: Verify TypeScript compiles**
+
+Run:
+
+```bash
+cd web && bun x tsc --noEmit
+```
+
+Expected: no errors.
+
+**Step 5: Commit**
+
+```bash
+git add web/src/features/upload/actions/upload-image.ts
+git commit -m "feat: parallel /analyze + /classify in upload action (Task 32)"
+```
+
+---
+
+### Task 33: Display AI suggestion in upload result card
+
+**Files:**
+- Modify: `web/src/features/upload/components/upload-result-card.tsx`
+
+**Step 1: Add AI classification display**
+
+When `result.pestTypeAi` is present, show:
+
+- A chip/badge: `🤖 Ferrugem • 87% confiança`
+- Confidence color: green (≥ 0.7), yellow (≥ 0.4), red (< 0.4)
+- The user's manual selection from the dropdown is preserved as the final `pestType`
+- Low confidence warning: `"A IA não tem certeza. Verifique visualmente."`
+
+```tsx
+{result.pestTypeAi && result.pestTypeAi !== "nao_identificado" && (
+  <div className="flex items-center gap-2 text-sm">
+    <Badge variant={confidenceVariant(result.pestTypeConfidence)}>
+      🤖 {formatPestLabel(result.pestTypeAi)} • {(result.pestTypeConfidence * 100).toFixed(0)}%
+    </Badge>
+  </div>
+)}
+```
+
+**Step 2: Add reasoning expand/collapse**
+
+A collapsible `<details>` element showing `result.pestTypeReasoning`.
+
+**Step 3: Verify build**
+
+Run:
+
+```bash
+cd web && bun run build
+```
+
+Expected: no errors.
+
+**Step 4: Commit**
+
+```bash
+git add web/src/features/upload/components/upload-result-card.tsx
+git commit -m "feat: show VLM pest suggestion in upload result card (Task 33)"
+```
+
+---
+
+### Task 34: Show AI classification on analysis detail page
+
+**Files:**
+- Modify: `web/src/app/analyses/[id]/page.tsx`
+
+**Step 1: Add AI reasoning card to detail page**
+
+Add a section below the metrics grid:
+
+```tsx
+{row.pestTypeAi && row.pestTypeAi !== "nao_identificado" && (
+  <Card className="p-4">
+    <p className="text-muted-foreground text-xs mb-2">Classificação por IA</p>
+    <div className="flex items-center gap-2 mb-1">
+      <Badge variant={confidenceVariant(row.pestTypeConfidence)}>
+        {formatPestLabel(row.pestTypeAi)} • {((row.pestTypeConfidence ?? 0) * 100).toFixed(0)}%
+      </Badge>
+      <span className="text-muted-foreground text-xs">{row.pestTypeModel}</span>
+    </div>
+    {row.pestTypeReasoning && (
+      <p className="text-sm text-muted-foreground">{row.pestTypeReasoning}</p>
+    )}
+  </Card>
+)}
+```
+
+**Step 2: Verify build**
+
+Run:
+
+```bash
+cd web && bun run build
+```
+
+Expected: no errors.
+
+**Step 3: Commit**
+
+```bash
+git add web/src/app/analyses/[id]/page.tsx
+git commit -m "feat: show VLM classification on analysis detail page (Task 34)"
 ```
 
 ---
@@ -1341,6 +1930,183 @@ git commit -m "feat: add report page and PDF export"
 
 ---
 
+## Phase 6.5 — CSV/JSON export and confidence transparency
+
+### Task 35: Add CSV/JSON export endpoints
+
+**Files:**
+- Create: `web/src/app/api/export/route.ts`
+- Create: `web/src/features/export/lib/csv-encoder.ts`
+- Create: `web/src/features/export/lib/json-encoder.ts`
+
+**Step 1: Implement CSV and JSON encoders**
+
+Create `web/src/features/export/lib/csv-encoder.ts` — a function that takes analysis rows (joined with farms and fields) and returns a CSV string with BOM and headers:
+
+`id, data_captura, fazenda, talhao, severidade, severidade_pt, tipo_praga, tipo_praga_ia, confianca_ia, pct_afetada, pixels_folha, pixels_doentes, warnings`
+
+Use `Intl.DateTimeFormat("pt-BR")` for dates.
+
+Create `web/src/features/export/lib/json-encoder.ts` — same data as JSON with camelCase keys.
+
+**Step 2: Implement the export route handler**
+
+Create `web/src/app/api/export/route.ts`:
+
+```ts
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const format = searchParams.get("format") ?? "csv";
+
+  if (format !== "csv" && format !== "json") {
+    return NextResponse.json({ error: "Invalid format. Use 'csv' or 'json'." }, { status: 400 });
+  }
+
+  const rows = db.select({...})
+    .from(analyses)
+    .innerJoin(fields, eq(analyses.fieldId, fields.id))
+    .innerJoin(farms, eq(fields.farmId, farms.id))
+    .orderBy(desc(analyses.capturedAt))
+    .all();
+
+  const filename = `agrosmart-export-${new Date().toISOString().slice(0, 10)}`;
+
+  if (format === "json") {
+    return new Response(jsonEncoder(rows), {
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Disposition": `attachment; filename="${filename}.json"`,
+      },
+    });
+  }
+
+  return new Response(csvEncoder(rows), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}.csv"`,
+    },
+  });
+}
+```
+
+**Step 3: Verify TypeScript compiles**
+
+Run:
+
+```bash
+cd web && bun x tsc --noEmit
+```
+
+Expected: no errors.
+
+**Step 4: Commit**
+
+```bash
+git add web/src/app/api/export web/src/features/export
+git commit -m "feat: add CSV/JSON export endpoints (Task 35)"
+```
+
+---
+
+### Task 36: Add export button to dashboard
+
+**Files:**
+- Create: `web/src/features/export/components/export-button.tsx`
+- Modify: `web/src/app/page.tsx`
+
+**Step 1: Create the export button component**
+
+A `"use client"` component with a shadcn `DropdownMenu`:
+
+- Trigger: `<Download className="size-4" />` icon button
+- Item 1: "Exportar CSV" → `<a href="/api/export?format=csv" download>`
+- Item 2: "Exportar JSON" → `<a href="/api/export?format=json" download>`
+
+**Step 2: Wire into the dashboard page**
+
+Add `<ExportButton />` in the header area of `page.tsx`, next to the page title.
+
+**Step 3: Verify build**
+
+Run:
+
+```bash
+cd web && bun run build
+```
+
+Expected: no errors.
+
+**Step 4: Commit**
+
+```bash
+git add web/src/features/export/components/export-button.tsx web/src/app/page.tsx
+git commit -m "feat: add export button to dashboard (Task 36)"
+```
+
+---
+
+### Task 37: Display confidence across dashboard cards
+
+**Files:**
+- Create: `web/src/shared/lib/format.ts`
+- Modify: `web/src/features/upload/components/upload-result-card.tsx`
+- Modify: `web/src/features/gallery/components/gallery-strip.tsx`
+
+**Step 1: Add confidence formatter helpers**
+
+Create `web/src/shared/lib/format.ts`:
+
+```ts
+export function formatConfidence(value: number | null): string {
+  if (value === null) return "—";
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+export function confidenceColor(value: number): string {
+  if (value >= 0.7) return "text-green-600";
+  if (value >= 0.4) return "text-yellow-600";
+  return "text-red-600";
+}
+
+export function formatPestLabel(pestType: string): string {
+  const labels: Record<string, string> = {
+    nao_identificado: "Não identificado",
+    ferrugem: "Ferrugem",
+    mancha_parda: "Mancha Parda",
+    oidio: "Oídio",
+    lagarta: "Lagarta",
+  };
+  return labels[pestType] ?? pestType;
+}
+```
+
+**Step 2: Show confidence in upload result card**
+
+Add a small confidence badge next to the AI pest type suggestion using the helpers above.
+
+**Step 3: Show confidence in gallery strip cards**
+
+If the item has `pestTypeConfidence`, display a subtle confidence indicator on the card.
+
+**Step 4: Verify build**
+
+Run:
+
+```bash
+cd web && bun run build
+```
+
+Expected: no errors.
+
+**Step 5: Commit**
+
+```bash
+git add web/src/shared/lib/format.ts web/src/features/upload/components/upload-result-card.tsx web/src/features/gallery/components/gallery-strip.tsx
+git commit -m "feat: add confidence display across dashboard (Task 37)"
+```
+
+---
+
 ## Phase 7 — Deployment, ops scripts, and documentation polish
 
 ### Task 23: Finalize multi-stage Dockerfiles, compose files, and Caddy configuration
@@ -1497,7 +2263,7 @@ git commit -m "docs: finalize README and deployment notes"
 
 ---
 
-## Phase 8 — Final verification and demo prep
+## Phase 8 — Final verification, academic deliverables, and demo prep
 
 ### Task 26: Run end-to-end verification and prepare the demo checklist
 
@@ -1555,16 +2321,116 @@ Record the exact commands and URLs needed for the FIAP presentation in the check
 
 ---
 
+### Task 38: Write technical report (Fase 1.3 + Fase 2 context)
+
+**Files:**
+- Create: `docs/relatorio-tecnico.md`
+
+**Step 1: Write the technical report in Portuguese**
+
+Sections:
+1. **Introdução** — problema agrícola, contexto do projeto
+2. **Objetivos** — Fase 1 (classificação) e Fase 2 (dashboard + análise)
+3. **Tecnologias utilizadas** — Next.js, FastAPI, OpenCV, OpenRouter/Gemini, SQLite, Docker
+4. **Arquitetura do sistema** — diagrama de componentes (web ↔ api ↔ sqlite)
+5. **Análise de imagem (Fase 1)** — HSV thresholds, pipeline de processamento, anotação visual
+6. **Classificação por IA** — VLM via OpenRouter, prompt engineering, fallback graceful
+7. **Dashboard (Fase 2)** — KPIs, séries temporais, breakdown por praga, heatmap
+8. **Upload e deduplicação** — SHA-256, thumbnail com sharp, paralelismo de APIs
+9. **Resultados e discussão** — insights simulados, limitações, decisões de design
+10. **Conclusão e trabalhos futuros**
+11. **Referências**
+
+**Step 2: Add screenshot placeholders**
+
+Mark positions where screenshots should be inserted: dashboard overview, upload flow, detail page, export.
+
+**Step 3: Commit**
+
+```bash
+git add docs/relatorio-tecnico.md
+git commit -m "docs: add technical report for Fase 1.3 (Task 38)"
+```
+
+---
+
+### Task 39: Write video narration script (2-4 minutes)
+
+**Files:**
+- Create: `docs/roteiro-video.md`
+
+**Step 1: Write the narration script**
+
+Structure for a 3-minute video:
+
+1. **0:00-0:30** — Apresentação do problema (pragas no agronegócio, impacto econômico)
+2. **0:30-1:00** — Visão geral do sistema (arquitetura, tecnologias)
+3. **1:00-1:30** — Dashboard: KPIs, séries temporais, breakdown por praga
+4. **1:30-2:00** — Upload + análise híbrida (HSV severidade + VLM classificação)
+5. **2:00-2:30** — Página de detalhe + recomendações IA
+6. **2:30-3:00** — Exportação de dados + conclusão (impacto pro agricultor)
+
+Include spoken lines and screen actions side by side in a table format.
+
+**Step 2: Commit**
+
+```bash
+git add docs/roteiro-video.md
+git commit -m "docs: add video narration script (Task 39)"
+```
+
+---
+
+### Task 40: Polish README for FIAP presentation
+
+**Files:**
+- Modify: `README.md`
+
+**Step 1: Add screenshots and visual structure**
+
+Insert screenshots of:
+- Dashboard with seeded data
+- Upload flow with AI classification
+- Analysis detail page
+- Export results
+
+**Step 2: Add "Para professores" section**
+
+Quick summary:
+- Como rodar localmente (3 comandos)
+- Stack resumida
+- Decisões arquiteturais (link para ADRs)
+
+**Step 3: Verify README renders**
+
+Preview on GitHub.
+
+**Step 4: Commit**
+
+```bash
+git add README.md
+git commit -m "docs: polish README for FIAP presentation (Task 40)"
+```
+
+---
+
 ## Suggested implementation order inside execution sessions
 
-1. Phase 1 completely
-2. Phase 2 completely
-3. Phase 3 completely
-4. Phase 4 completely
-5. Phase 5 completely
-6. Phase 6 completely
-7. Phase 7 completely
-8. Phase 8 verification only after all features are in place
+Priority order for maximum academic impact (nota 100):
+
+1. ✅ Phase 1 — Scaffolding, environment, and data model
+2. ✅ Phase 2 — Dashboard read path
+3. ✅ Phase 3 — FastAPI analysis service (HSV)
+4. ✅ Phase 4 — Upload flow, dedup, and image serving
+5. 🆕 **Phase 3.5** — VLM pest classification microservice (FastAPI + OpenRouter)
+6. 🆕 **Phase 4.5** — Wire VLM into upload flow (parallel /analyze + /classify)
+7. ⏳ Phase 6 — LLM recommendations and PDF report
+8. 🆕 **Phase 6.5** — CSV/JSON export and confidence transparency
+9. ⏳ Phase 5 — Observability, resilience, and audit trail
+10. ⏳ Phase 7 — Deployment, ops scripts, and documentation polish
+11. 🆕 **Phase 8** — Final verification, academic deliverables, and demo prep
+
+**Rationale:** Phases 3.5 + 4.5 unlock the AI classification differentiator (the professor sees "IA analisando o campo"). Phase 6 adds visual wow-factor (streaming recommendations). Phase 6.5 closes Fase 1.2 requirements (export + accuracy). Phases 5 and 7 are ops polish — needed for VPS/demo but lower academic impact. Phase 8 delivers the required academic documents (relatório técnico + vídeo).
 
 ## Non-negotiable guardrails during execution
 
@@ -1576,15 +2442,23 @@ Record the exact commands and URLs needed for the FIAP presentation in the check
 - Do not bypass SHA-256 dedup.
 - Do not expose raw IP or UA anywhere.
 - Do not serve upload files directly without path validation.
-- Do not move beyond the approved stack without a spec change.
+- VLM classification must be graceful — never block uploads when OpenRouter is unavailable.
+- All VLM results are suggestions — the user can always override manually via the dropdown.
+- CSV/JSON export must never expose hashed IP or UA from the audit table.
 
 ## Definition of done
 
 The project is done when all of the following are true:
-- seeded dashboard renders with all core visualizations
-- FastAPI `/analyze` works with real image uploads
+- seeded dashboard renders with all core visualizations (KPIs, time-series, pest breakdown, heatmap, gallery)
+- FastAPI `/analyze` works with real image uploads (HSV severity + area)
+- FastAPI `/classify` returns pest type with confidence via VLM (graceful fallback when unavailable)
 - uploads are deduplicated by SHA-256
+- upload calls `/analyze` and `/classify` in parallel (Promise.all)
+- upload result card shows AI pest suggestion with confidence and reasoning
+- analysis detail page shows VLM classification with expandable reasoning
 - original, thumbnail, and annotated images are stored and retrievable safely
+- CSV and JSON export endpoints work from the dashboard export button
+- confidence is displayed in result cards and gallery
 - audit trail records uploads with hashed identifiers
 - metrics and health endpoints are available
 - recommendation card uses cache, streams on success, and falls back safely on failure
@@ -1592,4 +2466,7 @@ The project is done when all of the following are true:
 - Docker Compose boots the full stack
 - Caddy fronts the app with the hardened headers from the spec
 - smoke script passes locally and on the target VPS
-- README and runbook document setup, deployment, backup, and known limitations
+- technical report (`docs/relatorio-tecnico.md`) covers architecture, technologies, and results
+- video script (`docs/roteiro-video.md`) covers all dashboard indicators and farmer decision-making
+- README documents setup, architecture, deployment, and known limitations
+- ADR-001 documents the decision to allow API egress for VLM classification
