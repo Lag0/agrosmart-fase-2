@@ -19,6 +19,25 @@ const ALLOWED_MIME: Record<string, string> = {
   "image/bmp": "bmp",
 };
 
+const EXT_TO_MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+};
+
+function resolveMimeType(file: File): string {
+  if (file.type && ALLOWED_MIME[file.type]) return file.type;
+  // Browsers may omit File.type on drag-and-drop — infer from extension
+  const dot = file.name.lastIndexOf(".");
+  if (dot !== -1) {
+    const ext = file.name.slice(dot).toLowerCase();
+    return EXT_TO_MIME[ext] ?? "";
+  }
+  return file.type;
+}
+
 export type UploadResult = {
   analysisId: string;
   severity: string;
@@ -104,8 +123,8 @@ export async function uploadImage(
       };
     }
 
-    // 5. Determine extension from MIME
-    const mimeType = file.type;
+    // 5. Determine extension from MIME (infer from filename if browser omitted type)
+    const mimeType = resolveMimeType(file);
     const ext = ALLOWED_MIME[mimeType];
     if (!ext) {
       return {
