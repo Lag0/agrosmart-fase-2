@@ -7,17 +7,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { thumbnailUrl } from "@/features/gallery/lib/image-paths";
 import { cn } from "@/lib/utils";
+import {
+  confidenceColor,
+  formatConfidence,
+  formatPestShort,
+  resolvePestDisplay,
+} from "@/shared/lib/format";
 import type { GalleryItem } from "@/shared/db/queries/gallery";
-import { confidenceColor, formatConfidence } from "@/shared/lib/format";
-
-const PEST_LABELS: Record<string, string> = {
-  ferrugem: "Ferrugem",
-  mancha_parda: "Mancha parda",
-  oidio: "Oídio",
-  lagarta: "Lagarta",
-  outro: "Outro",
-  nao_identificado: "Não identif.",
-};
 
 function severityColor(severity: string): string {
   switch (severity) {
@@ -61,18 +57,6 @@ type GalleryStripProps = {
   items: GalleryItem[];
 };
 
-function getDisplayPestType(item: GalleryItem): string {
-  if (item.pestType !== "nao_identificado") {
-    return item.pestType;
-  }
-
-  if (item.pestTypeAi && item.pestTypeAi !== "nao_identificado") {
-    return item.pestTypeAi;
-  }
-
-  return item.pestType;
-}
-
 export function GalleryStrip({ items }: GalleryStripProps) {
   if (items.length === 0) {
     return null;
@@ -96,7 +80,10 @@ export function GalleryStrip({ items }: GalleryStripProps) {
       </div>
       <div className="flex gap-4 overflow-x-auto scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-4">
         {items.map((item) => {
-          const displayPestType = getDisplayPestType(item);
+          const displayPestType = resolvePestDisplay(
+            item.pestType,
+            item.pestTypeAi,
+          );
 
           return (
             <Link
@@ -114,7 +101,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                   {item.thumbnailPath ? (
                     <img
                       src={thumbnailUrl(item.imageSha256)}
-                      alt={PEST_LABELS[displayPestType] ?? displayPestType}
+                      alt={formatPestShort(displayPestType)}
                       loading="lazy"
                       className="h-full w-full object-cover"
                     />
@@ -127,7 +114,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                 <CardContent className="flex flex-1 flex-col gap-3 p-5">
                   <div className="flex items-center justify-between">
                     <span className="truncate text-base font-medium">
-                      {PEST_LABELS[displayPestType] ?? displayPestType}
+                      {formatPestShort(displayPestType)}
                     </span>
                     <span
                       className={cn(

@@ -25,46 +25,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { annotatedUrl, originalUrl } from "@/features/gallery/lib/image-paths";
 import { db } from "@/shared/db/client";
 import { analyses, farms, fields } from "@/shared/db/schema";
+import {
+  confidenceColor,
+  formatConfidence,
+  formatPestLabel,
+  formatSeverityLabel,
+  SEVERITY_COLORS,
+} from "@/shared/lib/format";
 
-const SEVERITY_COLORS: Record<string, string> = {
-  healthy:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
-  beginning:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-  diseased: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-};
-
-const PEST_TYPE_LABELS: Record<string, string> = {
-  nao_identificado: "Não identificado",
-  ferrugem: "Ferrugem",
-  mancha_parda: "Mancha Parda",
-  oidio: "Oídio",
-  lagarta: "Lagarta",
-  outro: "Outro",
-};
-
-function formatPestType(value: string | null): string {
-  if (!value) return "Não identificado";
-  return PEST_TYPE_LABELS[value] ?? value.replace(/_/g, " ");
-}
-
-function getConfidenceStyle(confidence: number | null): string {
-  if (confidence == null) {
-    return "bg-secondary text-secondary-foreground";
-  }
-
-  if (confidence >= 0.7) {
-    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400";
-  }
-
-  if (confidence >= 0.4) {
-    return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-  }
-
-  return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
-}
-
-function formatDate(timestamp: number): string {
+function formatTimestamp(timestamp: number): string {
   return new Date(timestamp).toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
   });
@@ -171,7 +140,7 @@ export default async function AnalysisDetailPage({
             >
               {row.severityLabelPt}
             </Badge>
-            <Badge variant="outline">{formatPestType(row.pestType)}</Badge>
+            <Badge variant="outline">{formatPestLabel(row.pestType)}</Badge>
             <span className="text-muted-foreground text-sm">
               {row.farmName} · {row.fieldName}
             </span>
@@ -280,7 +249,7 @@ export default async function AnalysisDetailPage({
                 />
                 <MetricCard
                   label="Tipo principal"
-                  value={formatPestType(row.pestType)}
+                  value={formatPestLabel(row.pestType)}
                   hint="Valor final salvo na análise"
                 />
                 <MetricCard
@@ -316,10 +285,10 @@ export default async function AnalysisDetailPage({
                 <CardContent className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge
-                      className={getConfidenceStyle(row.pestTypeConfidence)}
+                      className={confidenceColor(row.pestTypeConfidence)}
                     >
-                      {formatPestType(row.pestTypeAi)} •{" "}
-                      {((row.pestTypeConfidence ?? 0) * 100).toFixed(0)}%
+                      {formatPestLabel(row.pestTypeAi)} •{" "}
+                      {formatConfidence(row.pestTypeConfidence)}
                     </Badge>
                     {row.pestTypeModel ? (
                       <span className="text-muted-foreground text-xs">
@@ -383,13 +352,13 @@ export default async function AnalysisDetailPage({
                       Capturado em
                     </p>
                     <p className="font-medium">
-                      {formatDate(Number(row.capturedAt))}
+                      {formatTimestamp(Number(row.capturedAt))}
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Criado em</p>
                     <p className="font-medium">
-                      {formatDate(Number(row.createdAt))}
+                      {formatTimestamp(Number(row.createdAt))}
                     </p>
                   </div>
                 </div>

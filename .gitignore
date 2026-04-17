@@ -20,3 +20,4 @@ skills-lock.json
 # Python bytecode
 api/**/__pycache__
 api/**/*.pyc
+.DS_Store

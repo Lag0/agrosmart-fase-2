@@ -16,20 +16,19 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import { PEST_TYPES } from "@/shared/lib/format";
 import type { PestBreakdownRow } from "@/shared/db/queries/pest-breakdown";
+
+const chartConfig = Object.fromEntries(
+  PEST_TYPES.map((p) => [
+    p.value,
+    { label: p.short, color: p.color },
+  ]),
+) satisfies ChartConfig;
 
 interface PestRadialCardProps {
   data: PestBreakdownRow[];
 }
-
-const chartConfig = {
-  ferrugem: { label: "Ferrugem", color: "var(--chart-1)" },
-  mancha_parda: { label: "Mancha parda", color: "var(--chart-2)" },
-  oidio: { label: "Oídio", color: "var(--chart-3)" },
-  lagarta: { label: "Lagarta", color: "var(--chart-4)" },
-  outro: { label: "Outro", color: "var(--chart-5)" },
-  nao_identificado: { label: "Não identif.", color: "var(--muted-foreground)" },
-} satisfies ChartConfig;
 
 export function PestRadialCard({ data }: PestRadialCardProps) {
   const total = data.reduce((sum, r) => sum + r.count, 0);

@@ -17,8 +17,12 @@ import {
 } from "@/components/ui/card";
 import type { UploadResult } from "@/features/upload/actions/upload-image";
 import { cn } from "@/lib/utils";
-import { confidenceColor, formatConfidence } from "@/shared/lib/format";
-import { PEST_TYPES } from "./pest-type-select";
+import {
+  confidenceColor,
+  formatConfidence,
+  formatPestLabel,
+  SEVERITY_COLORS,
+} from "@/shared/lib/format";
 
 interface UploadResultCardProps {
   result: UploadResult;
@@ -32,20 +36,17 @@ function getSeverityStyle(severity: string): {
   switch (severity) {
     case "healthy":
       return {
-        badgeClass:
-          "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+        badgeClass: SEVERITY_COLORS.healthy,
         label: "Saudável",
       };
     case "beginning":
       return {
-        badgeClass:
-          "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+        badgeClass: SEVERITY_COLORS.beginning,
         label: "Início",
       };
     case "diseased":
       return {
-        badgeClass:
-          "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+        badgeClass: SEVERITY_COLORS.diseased,
         label: "Doente",
       };
     default:
@@ -54,11 +55,6 @@ function getSeverityStyle(severity: string): {
         label: severity,
       };
   }
-}
-
-function getPestLabel(pestTypeValue: string): string {
-  const found = PEST_TYPES.find((p) => p.value === pestTypeValue);
-  return found?.label ?? pestTypeValue.replace(/_/g, " ");
 }
 
 export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
@@ -113,7 +109,7 @@ export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
           <div className="flex flex-col gap-0.5">
             <span className="text-muted-foreground text-xs">Tipo de praga</span>
             <span className="text-sm font-medium">
-              {getPestLabel(result.pestType)}
+              {formatPestLabel(result.pestType)}
             </span>
           </div>
         </div>
@@ -122,7 +118,7 @@ export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
           <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className={confidenceColor(result.pestTypeConfidence)}>
-                🤖 {getPestLabel(result.pestTypeAi ?? "nao_identificado")} •{" "}
+                🤖 {formatPestLabel(result.pestTypeAi ?? "nao_identificado")} •{" "}
                 {formatConfidence(result.pestTypeConfidence)}
               </Badge>
               {result.pestTypeModel && (

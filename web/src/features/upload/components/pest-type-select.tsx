@@ -14,17 +14,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PEST_TYPES, type PestTypeValue } from "@/shared/lib/format";
 
-export const PEST_TYPES = [
-  { value: "nao_identificado", label: "Não identificado" },
-  { value: "ferrugem", label: "Ferrugem" },
-  { value: "mancha_parda", label: "Mancha Parda" },
-  { value: "oidio", label: "Oídio" },
-  { value: "lagarta", label: "Lagarta" },
-  { value: "outro", label: "Outro" },
-] as const;
-
-export type PestTypeValue = (typeof PEST_TYPES)[number]["value"];
+export { PEST_TYPES, type PestTypeValue } from "@/shared/lib/format";
 
 interface PestTypeSelectProps {
   value: PestTypeValue;

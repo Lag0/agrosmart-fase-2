@@ -29,40 +29,11 @@ import {
   type AnalysisListItem,
   getAnalysesPage,
 } from "@/shared/db/queries/analyses-list";
-
-const SEVERITY_COLORS: Record<string, string> = {
-  healthy:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
-  beginning:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-  diseased: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-};
-
-const PEST_LABELS: Record<string, string> = {
-  ferrugem: "Ferrugem",
-  mancha_parda: "Mancha Parda",
-  oidio: "Oídio",
-  lagarta: "Lagarta",
-  outro: "Outro",
-  nao_identificado: "Não identificado",
-};
-
-function formatPestType(value: string | null): string {
-  if (!value) return "Não identificado";
-  return PEST_LABELS[value] ?? value.replace(/_/g, " ");
-}
-
-function getDisplayPestType(item: AnalysisListItem): string {
-  if (item.pestType !== "nao_identificado") {
-    return item.pestType;
-  }
-
-  if (item.pestTypeAi && item.pestTypeAi !== "nao_identificado") {
-    return item.pestTypeAi;
-  }
-
-  return item.pestType;
-}
+import {
+  formatPestLabel,
+  resolvePestDisplay,
+  SEVERITY_COLORS,
+} from "@/shared/lib/format";
 
 function formatCapturedAt(timestampMs: number): string {
   return new Date(timestampMs).toLocaleString("pt-BR", {
@@ -160,7 +131,7 @@ export default async function AnalysesPage({
                   </TableHeader>
                   <TableBody>
                     {items.map((item) => {
-                      const displayPestType = getDisplayPestType(item);
+                      const displayPestType = resolvePestDisplay(item.pestType, item.pestTypeAi);
 
                       return (
                         <TableRow key={item.id}>
@@ -170,7 +141,7 @@ export default async function AnalysesPage({
                                 {item.thumbnailPath ? (
                                   <img
                                     src={thumbnailUrl(item.imageSha256)}
-                                    alt={formatPestType(displayPestType)}
+                                    alt={formatPestLabel(displayPestType)}
                                     className="h-full w-full object-cover"
                                     loading="lazy"
                                   />
@@ -190,7 +161,7 @@ export default async function AnalysesPage({
                           </TableCell>
                           <TableCell>
                             <span className="font-medium">
-                              {formatPestType(displayPestType)}
+                              {formatPestLabel(displayPestType)}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -232,7 +203,7 @@ export default async function AnalysesPage({
 
             <div className="grid gap-4 md:hidden">
               {items.map((item) => {
-                const displayPestType = getDisplayPestType(item);
+                const displayPestType = resolvePestDisplay(item.pestType, item.pestTypeAi);
 
                 return (
                   <Card key={item.id} size="sm">
@@ -241,7 +212,7 @@ export default async function AnalysesPage({
                         {item.thumbnailPath ? (
                           <img
                             src={thumbnailUrl(item.imageSha256)}
-                            alt={formatPestType(displayPestType)}
+                            alt={formatPestLabel(displayPestType)}
                             className="h-full w-full object-cover"
                             loading="lazy"
                           />
@@ -261,7 +232,7 @@ export default async function AnalysesPage({
                             {item.severityLabelPt}
                           </Badge>
                           <Badge variant="outline">
-                            {formatPestType(displayPestType)}
+                            {formatPestLabel(displayPestType)}
                           </Badge>
                         </div>
 

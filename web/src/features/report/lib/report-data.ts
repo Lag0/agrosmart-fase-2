@@ -5,6 +5,7 @@ import { getOverallAffected } from "@/shared/db/queries/overall-affected";
 import { getPestBreakdown } from "@/shared/db/queries/pest-breakdown";
 import { getTimeSeries } from "@/shared/db/queries/time-series";
 import { analyses, farms, fields, recommendations } from "@/shared/db/schema";
+import { formatPestLabel } from "@/shared/lib/format";
 
 export type ReportData = {
   generatedAt: number;
@@ -46,21 +47,7 @@ export type ReportData = {
 
 const DAY_MS = 86_400_000;
 
-const PEST_LABELS: Record<string, string> = {
-  ferrugem: "Ferrugem",
-  mancha_parda: "Mancha Parda",
-  oidio: "Oídio",
-  lagarta: "Lagarta",
-  outro: "Outro",
-  nao_identificado: "Não identificado",
-};
-
-export function formatPestTypeLabel(
-  pestType: string | null | undefined,
-): string {
-  if (!pestType) return "Não identificado";
-  return PEST_LABELS[pestType] ?? pestType;
-}
+export { formatPestLabel as formatPestTypeLabel } from "@/shared/lib/format";
 
 function buildFallbackRecommendation(input: {
   avgAffectedPct: number;
@@ -94,7 +81,7 @@ export async function getReportData(): Promise<ReportData> {
   const dominantPestRaw = topPests.find(
     (item) => item.pestType !== "nao_identificado",
   )?.pestType;
-  const dominantPest = formatPestTypeLabel(
+  const dominantPest = formatPestLabel(
     dominantPestRaw ?? "nao_identificado",
   );
 

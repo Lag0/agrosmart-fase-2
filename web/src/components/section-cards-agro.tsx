@@ -68,7 +68,7 @@ export function SectionCards({ data }: SectionCardsProps) {
       description: "Tipos de praga",
       value: String(data.pestTypes),
       badge: null,
-      footer: "Ferrugem, mancha parda, oídio, lagarta e outros",
+      footer: "Ferrugem, Mancha Parda, Oídio, Lagarta, Outros",
     },
   ];
 

@@ -14,16 +14,8 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import { PEST_TYPES, formatPestLabel } from "@/shared/lib/format";
 import type { PestBreakdownRow } from "@/shared/db/queries/pest-breakdown";
-
-const PEST_LABELS: Record<string, string> = {
-  ferrugem: "Ferrugem",
-  mancha_parda: "Mancha parda",
-  oidio: "Oídio",
-  lagarta: "Lagarta",
-  outro: "Outro",
-  nao_identificado: "Não identificado",
-};
 
 const chartConfig = {
   count: { label: "Ocorrências" },
@@ -36,7 +28,7 @@ interface PestBreakdownCardProps {
 
 export function PestBreakdownCard({ data }: PestBreakdownCardProps) {
   const chartData = data.map((row) => ({
-    pest: PEST_LABELS[row.pestType] ?? row.pestType,
+    pest: formatPestLabel(row.pestType),
     count: row.count,
     avgAffectedPct: row.avgAffectedPct,
   }));
