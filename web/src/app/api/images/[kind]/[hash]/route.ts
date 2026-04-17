@@ -19,9 +19,9 @@ const MIME_MAP: Record<string, string> = {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { kind: string; hash: string } },
+  { params }: { params: Promise<{ kind: string; hash: string }> },
 ) {
-  const { kind, hash } = params;
+  const { kind, hash } = await params;
 
   // 1. Validate kind
   if (!VALID_KIND.has(kind)) {
