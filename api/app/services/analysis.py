@@ -93,14 +93,13 @@ def analyze(image_path: str, output_path: str) -> dict:
             "processing_ms": round(elapsed, 2),
         }
 
-    # --- Diseased region (yellow + brown in non-green area) ---
-    non_green = cv2.bitwise_not(green_mask)
-
+    # --- Diseased region (yellow + brown WITHIN the leaf area) ---
     yellow_mask = cv2.inRange(hsv, LOWER_YELLOW, UPPER_YELLOW)
     brown_mask = cv2.inRange(hsv, LOWER_BROWN, UPPER_BROWN)
 
     diseased_mask = cv2.bitwise_or(yellow_mask, brown_mask)
-    diseased_mask = cv2.bitwise_and(diseased_mask, non_green)
+    # Only count diseased pixels that fall INSIDE the leaf region
+    diseased_mask = cv2.bitwise_and(diseased_mask, green_mask)
     diseased_mask = cv2.morphologyEx(diseased_mask, cv2.MORPH_CLOSE, KERNEL, iterations=2)
     diseased_mask = cv2.morphologyEx(diseased_mask, cv2.MORPH_OPEN, KERNEL, iterations=1)
 
