@@ -1,1 +1,15 @@
 .worktrees/
+node_modules
+.next
+.env
+.env.production
+data/*
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+*.tsbuildinfo
+web/node_modules
+web/.next
+api/__pycache__
+api/.venv
