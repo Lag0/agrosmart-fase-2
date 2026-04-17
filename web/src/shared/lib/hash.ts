@@ -1,5 +1,3 @@
-"use server"; // runs only on the server
-
 import { createHash, createHmac } from "node:crypto";
 
 export function sha256Hex(buffer: Buffer | Uint8Array): string {
