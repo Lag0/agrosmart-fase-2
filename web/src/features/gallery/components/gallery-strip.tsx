@@ -61,6 +61,18 @@ type GalleryStripProps = {
   items: GalleryItem[];
 };
 
+function getDisplayPestType(item: GalleryItem): string {
+  if (item.pestType !== "nao_identificado") {
+    return item.pestType;
+  }
+
+  if (item.pestTypeAi && item.pestTypeAi !== "nao_identificado") {
+    return item.pestTypeAi;
+  }
+
+  return item.pestType;
+}
+
 export function GalleryStrip({ items }: GalleryStripProps) {
   if (items.length === 0) {
     return null;
@@ -69,7 +81,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h3 className="text-lg font-semibold tracking-tight">
+        <h3>
           Análises recentes
         </h3>
         <p className="text-muted-foreground text-sm">
@@ -77,7 +89,10 @@ export function GalleryStrip({ items }: GalleryStripProps) {
         </p>
       </div>
       <div className="flex gap-4 overflow-x-auto scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-4">
-        {items.map((item) => (
+        {items.map((item) => {
+          const displayPestType = getDisplayPestType(item);
+
+          return (
           <Link
             key={item.id}
             href={`/analyses/${item.id}`}
@@ -93,7 +108,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                 {item.thumbnailPath ? (
                   <img
                     src={thumbnailUrl(item.imageSha256)}
-                    alt={PEST_LABELS[item.pestType] ?? item.pestType}
+                    alt={PEST_LABELS[displayPestType] ?? displayPestType}
                     loading="lazy"
                     className="h-full w-full object-cover"
                   />
@@ -106,7 +121,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
               <CardContent className="flex flex-col gap-3 p-5">
                 <div className="flex items-center justify-between">
                   <span className="truncate text-base font-medium">
-                    {PEST_LABELS[item.pestType] ?? item.pestType}
+                    {PEST_LABELS[displayPestType] ?? displayPestType}
                   </span>
                   <span
                     className={cn(
@@ -116,7 +131,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                   />
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-semibold tabular-nums tracking-tight">
+                  <span className="font-heading tabular-nums text-3xl font-bold tracking-tight">
                     {item.affectedPct.toFixed(1)}%
                   </span>
                   <span className="text-muted-foreground text-sm font-medium">
@@ -126,7 +141,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
               </CardContent>
             </Card>
           </Link>
-        ))}
+        )})}
       </div>
     </div>
   );

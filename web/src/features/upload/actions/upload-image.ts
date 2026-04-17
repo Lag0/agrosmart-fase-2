@@ -82,6 +82,24 @@ type ClassifyResponse = {
   model: string;
 };
 
+function resolveFinalPestType(
+  manualPestType: string,
+  classification: ClassifyResponse | null,
+): string {
+  if (manualPestType !== "nao_identificado") {
+    return manualPestType;
+  }
+
+  if (
+    classification?.pest_type &&
+    classification.pest_type !== "nao_identificado"
+  ) {
+    return classification.pest_type;
+  }
+
+  return manualPestType;
+}
+
 export async function uploadImage(
   formData: FormData,
 ): Promise<ActionResult<UploadResult>> {
@@ -128,7 +146,10 @@ export async function uploadImage(
           severity: existing.severity,
           severityLabelPt: existing.severityLabelPt,
           affectedPct: existing.affectedPct,
-          pestType: existing.pestType,
+          pestType:
+            existing.pestType === "nao_identificado" && existing.pestTypeAi
+              ? existing.pestTypeAi
+              : existing.pestType,
           pestTypeAi: existing.pestTypeAi,
           pestTypeConfidence: existing.pestTypeConfidence,
           pestTypeReasoning: existing.pestTypeReasoning,
@@ -278,6 +299,8 @@ export async function uploadImage(
       };
     }
 
+    const finalPestType = resolveFinalPestType(pestType, classification);
+
     // 9. Resolve fieldId — use provided or fall back to first field in DB
     let resolvedFieldId = fieldId;
     if (!resolvedFieldId) {
@@ -318,7 +341,7 @@ export async function uploadImage(
           imageSha256: sha256,
           source: "upload",
           fieldId: resolvedFieldId,
-          pestType,
+          pestType: finalPestType,
           pestTypeAi: classification?.pest_type ?? null,
           pestTypeConfidence: classification?.confidence ?? null,
           pestTypeReasoning: classification?.reasoning ?? null,
@@ -354,7 +377,10 @@ export async function uploadImage(
             severity: dup.severity,
             severityLabelPt: dup.severityLabelPt,
             affectedPct: dup.affectedPct,
-            pestType: dup.pestType,
+            pestType:
+              dup.pestType === "nao_identificado" && dup.pestTypeAi
+                ? dup.pestTypeAi
+                : dup.pestType,
             pestTypeAi: dup.pestTypeAi,
             pestTypeConfidence: dup.pestTypeConfidence,
             pestTypeReasoning: dup.pestTypeReasoning,
@@ -384,7 +410,7 @@ export async function uploadImage(
         severity: apiResult.severity,
         severityLabelPt: apiResult.severity_label_pt,
         affectedPct: apiResult.affected_pct,
-        pestType,
+        pestType: finalPestType,
         pestTypeAi: classification?.pest_type ?? null,
         pestTypeConfidence: classification?.confidence ?? null,
         pestTypeReasoning: classification?.reasoning ?? null,
