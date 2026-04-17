@@ -172,7 +172,7 @@ export function ChartLineInteractive() {
       <CardContent className="px-2 sm:p-6">
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
+          className="aspect-auto h-62.5 w-full"
         >
           <LineChart
             accessibilityLayer
@@ -200,7 +200,7 @@ export function ChartLineInteractive() {
             <ChartTooltip
               content={
                 <ChartTooltipContent
-                  className="w-[150px]"
+                  className="w-37.5"
                   nameKey="views"
                   labelFormatter={(value) => {
                     return new Date(value).toLocaleDateString("en-US", {
