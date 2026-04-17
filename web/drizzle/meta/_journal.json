@@ -8,6 +8,13 @@
       "when": 1776433840716,
       "tag": "0001_kind_matthew_murdock",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776449103163,
+      "tag": "0001_bored_vertigo",
+      "breakpoints": true
     }
   ]
 }

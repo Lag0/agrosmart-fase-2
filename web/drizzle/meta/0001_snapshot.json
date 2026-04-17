@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "10972f1d-a6f2-4a63-95a0-0a2f91ce3e34",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "14d62f51-c321-4409-8de2-85d908b4b720",
+  "prevId": "10972f1d-a6f2-4a63-95a0-0a2f91ce3e34",
   "tables": {
     "analyses": {
       "name": "analyses",
@@ -50,6 +50,34 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'nao_identificado'"
+        },
+        "pest_type_ai": {
+          "name": "pest_type_ai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pest_type_confidence": {
+          "name": "pest_type_confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pest_type_reasoning": {
+          "name": "pest_type_reasoning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pest_type_model": {
+          "name": "pest_type_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "severity": {
           "name": "severity",
@@ -132,42 +160,60 @@
       "indexes": {
         "analyses_request_id_unique": {
           "name": "analyses_request_id_unique",
-          "columns": ["request_id"],
+          "columns": [
+            "request_id"
+          ],
           "isUnique": true
         },
         "analyses_image_sha256_unique": {
           "name": "analyses_image_sha256_unique",
-          "columns": ["image_sha256"],
+          "columns": [
+            "image_sha256"
+          ],
           "isUnique": true
         },
         "analyses_field_captured_idx": {
           "name": "analyses_field_captured_idx",
-          "columns": ["field_id", "captured_at"],
+          "columns": [
+            "field_id",
+            "captured_at"
+          ],
           "isUnique": false
         },
         "analyses_captured_idx": {
           "name": "analyses_captured_idx",
-          "columns": ["captured_at"],
+          "columns": [
+            "captured_at"
+          ],
           "isUnique": false
         },
         "analyses_severity_idx": {
           "name": "analyses_severity_idx",
-          "columns": ["severity"],
+          "columns": [
+            "severity"
+          ],
           "isUnique": false
         },
         "analyses_pest_captured_idx": {
           "name": "analyses_pest_captured_idx",
-          "columns": ["pest_type", "captured_at"],
+          "columns": [
+            "pest_type",
+            "captured_at"
+          ],
           "isUnique": false
         },
         "analyses_sha_idx": {
           "name": "analyses_sha_idx",
-          "columns": ["image_sha256"],
+          "columns": [
+            "image_sha256"
+          ],
           "isUnique": true
         },
         "analyses_request_idx": {
           "name": "analyses_request_idx",
-          "columns": ["request_id"],
+          "columns": [
+            "request_id"
+          ],
           "isUnique": true
         }
       },
@@ -176,8 +222,12 @@
           "name": "analyses_field_id_fields_id_fk",
           "tableFrom": "analyses",
           "tableTo": "fields",
-          "columnsFrom": ["field_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "field_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -214,7 +264,9 @@
       "indexes": {
         "farms_name_idx": {
           "name": "farms_name_idx",
-          "columns": ["name"],
+          "columns": [
+            "name"
+          ],
           "isUnique": true
         }
       },
@@ -258,7 +310,9 @@
       "indexes": {
         "fields_farm_idx": {
           "name": "fields_farm_idx",
-          "columns": ["farm_id"],
+          "columns": [
+            "farm_id"
+          ],
           "isUnique": false
         }
       },
@@ -267,8 +321,12 @@
           "name": "fields_farm_id_farms_id_fk",
           "tableFrom": "fields",
           "tableTo": "farms",
-          "columnsFrom": ["farm_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "farm_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -357,7 +415,9 @@
       "indexes": {
         "recommendations_analysis_idx": {
           "name": "recommendations_analysis_idx",
-          "columns": ["analysis_id"],
+          "columns": [
+            "analysis_id"
+          ],
           "isUnique": false
         }
       },
@@ -366,8 +426,12 @@
           "name": "recommendations_analysis_id_analyses_id_fk",
           "tableFrom": "recommendations",
           "tableTo": "analyses",
-          "columnsFrom": ["analysis_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

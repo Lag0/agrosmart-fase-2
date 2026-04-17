@@ -44,6 +44,10 @@ export type UploadResult = {
   severityLabelPt: string;
   affectedPct: number;
   pestType: string;
+  pestTypeAi: string | null;
+  pestTypeConfidence: number | null;
+  pestTypeReasoning: string | null;
+  pestTypeModel: string | null;
   duplicate: boolean;
   capturedAt: number;
 };
@@ -68,6 +72,14 @@ type ApiErrorResponse = {
     message?: string;
     message_pt?: string;
   };
+};
+
+type ClassifyResponse = {
+  pest_type: string;
+  confidence: number;
+  reasoning: string;
+  alternatives: Array<{ type: string; confidence: number }>;
+  model: string;
 };
 
 export async function uploadImage(
@@ -117,6 +129,10 @@ export async function uploadImage(
           severityLabelPt: existing.severityLabelPt,
           affectedPct: existing.affectedPct,
           pestType: existing.pestType,
+          pestTypeAi: existing.pestTypeAi,
+          pestTypeConfidence: existing.pestTypeConfidence,
+          pestTypeReasoning: existing.pestTypeReasoning,
+          pestTypeModel: existing.pestTypeModel,
           duplicate: true,
           capturedAt: Number(existing.capturedAt),
         },
@@ -158,27 +174,54 @@ export async function uploadImage(
       // Thumbnail failure is non-fatal — continue without thumb
     }
 
-    // 8. Call FastAPI /analyze
-    const apiFormData = new FormData();
-    apiFormData.append(
+    // 8. Call FastAPI /analyze and /classify in parallel
+    const analyzeFormData = new FormData();
+    analyzeFormData.append(
       "image",
       new Blob([bytes], { type: mimeType }),
       file.name,
     );
-    apiFormData.append("request_id", clientRequestId);
+    analyzeFormData.append("request_id", clientRequestId);
+
+    const classifyFormData = new FormData();
+    classifyFormData.append(
+      "image",
+      new Blob([bytes], { type: mimeType }),
+      file.name,
+    );
+    classifyFormData.append("sha256", sha256);
 
     let apiResult: ApiResponse;
+    let classification: ClassifyResponse | null = null;
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15_000);
-      const apiRes = await fetch(`${env.API_BASE_URL}/analyze`, {
-        method: "POST",
-        body: apiFormData,
-        signal: controller.signal,
-        headers: { "X-Request-Id": clientRequestId },
-      });
-      clearTimeout(timeoutId);
+      const analyzeController = new AbortController();
+      const classifyController = new AbortController();
+      const analyzeTimeoutId = setTimeout(() => analyzeController.abort(), 15_000);
+      const classifyTimeoutId = setTimeout(() => classifyController.abort(), 15_000);
 
+      const [analysisOutcome, classifyOutcome] = await Promise.allSettled([
+        fetch(`${env.API_BASE_URL}/analyze`, {
+          method: "POST",
+          body: analyzeFormData,
+          signal: analyzeController.signal,
+          headers: { "X-Request-Id": clientRequestId },
+        }),
+        fetch(`${env.API_BASE_URL}/classify`, {
+          method: "POST",
+          body: classifyFormData,
+          signal: classifyController.signal,
+          headers: { "X-Request-Id": clientRequestId },
+        }),
+      ]);
+
+      clearTimeout(analyzeTimeoutId);
+      clearTimeout(classifyTimeoutId);
+
+      if (analysisOutcome.status === "rejected") {
+        throw analysisOutcome.reason;
+      }
+
+      const apiRes = analysisOutcome.value;
       const json = (await apiRes.json()) as ApiResponse | ApiErrorResponse;
 
       if (!apiRes.ok) {
@@ -192,7 +235,6 @@ export async function uploadImage(
         };
         const mappedCode: ActionErrorCode =
           (code && errorMap[code]) ? errorMap[code] : "INTERNAL";
-        // Clean up written file on API failure
         try {
           fs.unlinkSync(originalPath);
         } catch {
@@ -207,6 +249,17 @@ export async function uploadImage(
         };
       }
       apiResult = json as ApiResponse;
+
+      if (classifyOutcome.status === "fulfilled") {
+        try {
+          if (classifyOutcome.value.ok) {
+            classification =
+              (await classifyOutcome.value.json()) as ClassifyResponse;
+          }
+        } catch {
+          // Non-blocking — upload succeeds without AI classification
+        }
+      }
     } catch (err: unknown) {
       try {
         fs.unlinkSync(originalPath);
@@ -266,6 +319,10 @@ export async function uploadImage(
           source: "upload",
           fieldId: resolvedFieldId,
           pestType,
+          pestTypeAi: classification?.pest_type ?? null,
+          pestTypeConfidence: classification?.confidence ?? null,
+          pestTypeReasoning: classification?.reasoning ?? null,
+          pestTypeModel: classification?.model ?? null,
           severity: apiResult.severity,
           severityLabelPt: apiResult.severity_label_pt,
           affectedPct: apiResult.affected_pct,
@@ -298,6 +355,10 @@ export async function uploadImage(
             severityLabelPt: dup.severityLabelPt,
             affectedPct: dup.affectedPct,
             pestType: dup.pestType,
+            pestTypeAi: dup.pestTypeAi,
+            pestTypeConfidence: dup.pestTypeConfidence,
+            pestTypeReasoning: dup.pestTypeReasoning,
+            pestTypeModel: dup.pestTypeModel,
             duplicate: true,
             capturedAt: Number(dup.capturedAt),
           },
@@ -324,6 +385,10 @@ export async function uploadImage(
         severityLabelPt: apiResult.severity_label_pt,
         affectedPct: apiResult.affected_pct,
         pestType,
+        pestTypeAi: classification?.pest_type ?? null,
+        pestTypeConfidence: classification?.confidence ?? null,
+        pestTypeReasoning: classification?.reasoning ?? null,
+        pestTypeModel: classification?.model ?? null,
         duplicate: false,
         capturedAt: now,
       },

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { db } from "@/shared/db/client";
 import { analyses, fields, farms } from "@/shared/db/schema";
 import { annotatedUrl, originalUrl } from "@/features/gallery/lib/image-paths";
@@ -18,6 +19,35 @@ const SEVERITY_COLORS: Record<string, string> = {
   diseased: "bg-red-100 text-red-800",
 };
 
+const PEST_TYPE_LABELS: Record<string, string> = {
+  nao_identificado: "Não identificado",
+  ferrugem: "Ferrugem",
+  mancha_parda: "Mancha Parda",
+  oidio: "Oídio",
+  lagarta: "Lagarta",
+};
+
+function formatPestType(value: string | null): string {
+  if (!value) return "Não identificado";
+  return PEST_TYPE_LABELS[value] ?? value.replace(/_/g, " ");
+}
+
+function getConfidenceStyle(confidence: number | null): string {
+  if (confidence == null) {
+    return "bg-muted text-muted-foreground";
+  }
+
+  if (confidence >= 0.7) {
+    return "bg-emerald-100 text-emerald-800";
+  }
+
+  if (confidence >= 0.4) {
+    return "bg-amber-100 text-amber-800";
+  }
+
+  return "bg-red-100 text-red-800";
+}
+
 export default async function AnalysisDetailPage({ params }: Props) {
   const row = db
     .select({
@@ -30,6 +60,10 @@ export default async function AnalysisDetailPage({ params }: Props) {
       leafPixels: analyses.leafPixels,
       diseasedPixels: analyses.diseasedPixels,
       pestType: analyses.pestType,
+      pestTypeAi: analyses.pestTypeAi,
+      pestTypeConfidence: analyses.pestTypeConfidence,
+      pestTypeReasoning: analyses.pestTypeReasoning,
+      pestTypeModel: analyses.pestTypeModel,
       warnings: analyses.warnings,
       annotatedPath: analyses.annotatedPath,
       originalPath: analyses.originalPath,
@@ -62,7 +96,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
 
   return (
     <SidebarInset>
-      <div className="flex flex-1 flex-col gap-6 p-6 max-w-4xl">
+      <div className="flex flex-1 flex-col gap-6 p-6 pb-20 md:pb-6 max-w-4xl">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Link
@@ -71,7 +105,7 @@ export default async function AnalysisDetailPage({ params }: Props) {
           >
             ← Voltar
           </Link>
-          <h1 className="font-heading text-2xl font-bold tracking-tight">
+          <h1>
             Detalhe da análise
           </h1>
         </div>
@@ -107,8 +141,8 @@ export default async function AnalysisDetailPage({ params }: Props) {
           </div>
           <div className="rounded-xl border p-4">
             <p className="text-muted-foreground text-xs">Praga</p>
-            <p className="text-sm font-medium capitalize">
-              {row.pestType.replace(/_/g, " ")}
+            <p className="text-sm font-medium">
+              {formatPestType(row.pestType)}
             </p>
           </div>
           <div className="rounded-xl border p-4">
@@ -118,6 +152,32 @@ export default async function AnalysisDetailPage({ params }: Props) {
             </p>
           </div>
         </div>
+
+        {row.pestTypeAi && row.pestTypeAi !== "nao_identificado" && (
+          <Card className="p-4">
+            <p className="text-muted-foreground mb-2 text-xs">Classificação por IA</p>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Badge className={getConfidenceStyle(row.pestTypeConfidence)}>
+                {formatPestType(row.pestTypeAi)} • {((row.pestTypeConfidence ?? 0) * 100).toFixed(0)}%
+              </Badge>
+              {row.pestTypeModel && (
+                <span className="text-muted-foreground text-xs">
+                  {row.pestTypeModel}
+                </span>
+              )}
+            </div>
+            {row.pestTypeReasoning && (
+              <p className="text-muted-foreground text-sm leading-6">
+                {row.pestTypeReasoning}
+              </p>
+            )}
+            {(row.pestTypeConfidence ?? 0) < 0.4 && (
+              <p className="mt-3 text-sm text-amber-700">
+                A IA não tem certeza. Verifique visualmente antes de tomar decisão.
+              </p>
+            )}
+          </Card>
+        )}
 
         {/* Warnings */}
         {warnings.includes("NO_LEAF_DETECTED") && (

@@ -45,6 +45,10 @@ export const analyses = sqliteTable(
       .notNull()
       .references(() => fields.id, { onDelete: "restrict" }),
     pestType: text("pest_type").notNull().default("nao_identificado"),
+    pestTypeAi: text("pest_type_ai"),
+    pestTypeConfidence: real("pest_type_confidence"),
+    pestTypeReasoning: text("pest_type_reasoning"),
+    pestTypeModel: text("pest_type_model"),
     severity: text("severity").notNull(),
     severityLabelPt: text("severity_label_pt").notNull(),
     affectedPct: real("affected_pct").notNull(),
