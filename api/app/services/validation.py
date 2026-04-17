@@ -122,7 +122,7 @@ def _sniff_mime_from_header(data: bytes) -> str:
     """
     if data[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
-    if data[:2] in (b"\xff\xd8", b"\xff\xe0", b"\xff\xe1"):
+    if data[:2] == b"\xff\xd8":
         return "image/jpeg"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"

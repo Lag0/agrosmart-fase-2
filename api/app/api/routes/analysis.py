@@ -11,7 +11,7 @@ from pathlib import Path
 from types import ModuleType
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.api.deps import get_analysis_service, get_validation_service
 from app.config import Settings, get_settings
@@ -28,6 +28,8 @@ _EXT_MAP: dict[str, str] = {
     "image/webp": ".webp",
     "image/bmp": ".bmp",
 }
+_EXT_MIME: dict[str, str] = {ext: mime for mime, ext in _EXT_MAP.items()}
+_IMAGE_EXTS: tuple[str, ...] = tuple(_EXT_MIME.keys())
 
 
 def _get_request_id(request: Request) -> str:
@@ -49,6 +51,45 @@ def _ensure_dirs(uploads_dir: str) -> tuple[Path, Path]:
     original_dir.mkdir(parents=True, exist_ok=True)
     annotated_dir.mkdir(parents=True, exist_ok=True)
     return original_dir, annotated_dir
+
+
+def _find_first_existing(stem: str, directory: Path) -> tuple[Path, str] | None:
+    for ext in _IMAGE_EXTS:
+        candidate = directory / f"{stem}{ext}"
+        if candidate.exists():
+            return candidate, _EXT_MIME[ext]
+    return None
+
+
+@router.get("/images/annotated/{request_id}", response_model=None)
+async def get_annotated_image(
+    request_id: str,
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    try:
+        uuid.UUID(request_id, version=4)
+    except (ValueError, AttributeError):
+        return make_error_response(
+            request_id=request_id,
+            code="MISSING_FIELD",
+            msg_en="request_id must be a valid UUIDv4.",
+            msg_pt="request_id deve ser um UUIDv4 valido.",
+            status=400,
+        )
+
+    annotated_dir = Path(settings.uploads_dir) / "annotated"
+    found = _find_first_existing(request_id, annotated_dir)
+    if found is None:
+        return make_error_response(
+            request_id=request_id,
+            code="NOT_FOUND",
+            msg_en="Annotated image not found.",
+            msg_pt="Imagem anotada não encontrada.",
+            status=404,
+        )
+
+    file_path, mime = found
+    return FileResponse(path=file_path, media_type=mime)
 
 
 @router.post("/analyze")

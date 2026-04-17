@@ -15,10 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  ChartContainer,
-  type ChartConfig,
-} from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer } from "@/components/ui/chart";
 import type { OverallAffected } from "@/shared/db/queries/overall-affected";
 
 const chartConfig = {
@@ -67,11 +64,7 @@ export function OverallAffectedCard({ data }: Props) {
             innerRadius={60}
             outerRadius={110}
           >
-            <PolarAngleAxis
-              type="number"
-              domain={[0, 100]}
-              tick={false}
-            />
+            <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
             <PolarRadiusAxis
               tick={false}
               tickLine={false}

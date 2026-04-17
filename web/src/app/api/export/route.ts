@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { encodeCsv } from "@/features/export/lib/csv-encoder";
 import { encodeJson } from "@/features/export/lib/json-encoder";
 import type { ExportAnalysisRecord } from "@/features/export/lib/types";
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(encodeJson(records), {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename=\"agrosmart-export-${date}.json\"`,
+        "Content-Disposition": `attachment; filename="agrosmart-export-${date}.json"`,
         "Cache-Control": "no-store",
       },
     });
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(encodeCsv(records), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename=\"agrosmart-export-${date}.csv\"`,
+      "Content-Disposition": `attachment; filename="agrosmart-export-${date}.csv"`,
       "Cache-Control": "no-store",
     },
   });

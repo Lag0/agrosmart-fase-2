@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from "recharts"
+import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from "recharts";
 
 import {
   Card,
@@ -9,15 +9,15 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
+  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart"
+} from "@/components/ui/chart";
 
-export const description = "A radar chart with dots"
+export const description = "A radar chart with dots";
 
 const chartData = [
   { month: "January", desktop: 186 },
@@ -26,14 +26,14 @@ const chartData = [
   { month: "April", desktop: 273 },
   { month: "May", desktop: 209 },
   { month: "June", desktop: 214 },
-]
+];
 
 const chartConfig = {
   desktop: {
     label: "Desktop",
     color: "var(--chart-1)",
   },
-} satisfies ChartConfig
+} satisfies ChartConfig;
 
 export function ChartRadarDots() {
   return (
@@ -71,5 +71,5 @@ export function ChartRadarDots() {
         </div>
       </CardFooter>
     </Card>
-  )
+  );
 }

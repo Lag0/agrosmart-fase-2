@@ -12,9 +12,7 @@ export function PageHeader({ title, description, children }: PageHeaderProps) {
     <CardHeader>
       <div className="flex items-center justify-between">
         <div>
-          <CardTitle className="font-heading text-2xl tracking-tight">
-            {title}
-          </CardTitle>
+          <CardTitle>{title}</CardTitle>
           {description && (
             <p className="text-muted-foreground mt-1 text-sm">{description}</p>
           )}

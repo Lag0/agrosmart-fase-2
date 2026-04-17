@@ -7,14 +7,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { thumbnailUrl } from "@/features/gallery/lib/image-paths";
 import { cn } from "@/lib/utils";
-import { confidenceColor, formatConfidence } from "@/shared/lib/format";
 import type { GalleryItem } from "@/shared/db/queries/gallery";
+import { confidenceColor, formatConfidence } from "@/shared/lib/format";
 
 const PEST_LABELS: Record<string, string> = {
   ferrugem: "Ferrugem",
   mancha_parda: "Mancha parda",
   oidio: "Oídio",
   lagarta: "Lagarta",
+  outro: "Outro",
   nao_identificado: "Não identif.",
 };
 
@@ -101,12 +102,12 @@ export function GalleryStrip({ items }: GalleryStripProps) {
             <Link
               key={item.id}
               href={`/analyses/${item.id}`}
-              className="group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-3xl"
+              className="group flex flex-col h-full shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-3xl"
             >
-              <Card className="w-[200px] overflow-hidden rounded-3xl transition-all duration-300 hover:shadow-md hover:-translate-y-1">
+              <Card className="flex flex-col h-full w-[200px] overflow-hidden rounded-3xl transition-all duration-300 hover:shadow-md hover:-translate-y-1">
                 <div
                   className={cn(
-                    "aspect-[4/3] overflow-hidden border-l-4 transition-colors",
+                    "aspect-[4/3] shrink-0 overflow-hidden border-l-4 transition-colors",
                     severityColor(item.severity),
                   )}
                 >
@@ -123,7 +124,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                     </div>
                   )}
                 </div>
-                <CardContent className="flex flex-col gap-3 p-5">
+                <CardContent className="flex flex-1 flex-col gap-3 p-5">
                   <div className="flex items-center justify-between">
                     <span className="truncate text-base font-medium">
                       {PEST_LABELS[displayPestType] ?? displayPestType}
@@ -135,7 +136,7 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                       )}
                     />
                   </div>
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline justify-between mt-auto">
                     <span className="font-heading tabular-nums text-3xl font-bold tracking-tight">
                       {item.affectedPct.toFixed(1)}%
                     </span>
@@ -143,16 +144,18 @@ export function GalleryStrip({ items }: GalleryStripProps) {
                       {relativeTime(item.capturedAt)}
                     </span>
                   </div>
-                  {item.pestTypeConfidence != null && (
-                    <span
-                      className={cn(
-                        "inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium",
-                        confidenceColor(item.pestTypeConfidence),
-                      )}
-                    >
-                      IA: {formatConfidence(item.pestTypeConfidence)}
-                    </span>
-                  )}
+                  <div className="h-5">
+                    {item.pestTypeConfidence != null && (
+                      <span
+                        className={cn(
+                          "inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium",
+                          confidenceColor(item.pestTypeConfidence),
+                        )}
+                      >
+                        IA: {formatConfidence(item.pestTypeConfidence)}
+                      </span>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </Link>

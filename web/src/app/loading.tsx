@@ -9,7 +9,6 @@ export default function Loading() {
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
           <Skeleton key={i} className="h-24" />
         ))}
       </div>

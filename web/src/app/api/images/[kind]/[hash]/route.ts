@@ -1,12 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { env } from "@/shared/lib/env";
+import { type NextRequest, NextResponse } from "next/server";
 import { guardPath } from "@/shared/lib/fs-safe";
 
 const VALID_KIND = new Set(["original", "annotated", "thumbs"]);
+const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".bmp"] as const;
 
-// hex sha256 (64 chars) OR seed/request-id filename stems (alphanumeric + _ -)
+// Em runtime suportamos tanto Docker (/data/uploads) quanto execução local.
+// Mantemos caminhos estáticos para evitar tracing amplo do projeto no build.
+const UPLOAD_ROOTS = Array.from(
+  new Set(["/data/uploads", path.resolve(process.cwd(), "../data/uploads")]),
+);
+
+// hex sha256 (64 chars) OR request-id/seed filename stems (alphanumeric + _ -)
 const HASH_RE = /^[a-f0-9]{64}$|^[a-zA-Z0-9_-]{1,80}$/;
 
 const MIME_MAP: Record<string, string> = {
@@ -33,19 +39,25 @@ export async function GET(
     return NextResponse.json({ error: "Invalid hash" }, { status: 400 });
   }
 
-  // 3. Find the file — try each allowed extension in preference order
-  const exts = [".jpg", ".webp", ".png", ".bmp"];
+  // 3. Find the file — try each upload root and extension.
   let filePath: string | null = null;
 
-  for (const ext of exts) {
-    const candidate = path.join(env.UPLOADS_DIR, kind, `${hash}${ext}`);
-    try {
-      guardPath(env.UPLOADS_DIR, candidate);
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 400 });
+  for (const root of UPLOAD_ROOTS) {
+    for (const ext of IMAGE_EXTS) {
+      const candidate = path.join(root, kind, `${hash}${ext}`);
+      try {
+        guardPath(root, candidate);
+      } catch {
+        continue;
+      }
+
+      if (fs.existsSync(candidate)) {
+        filePath = candidate;
+        break;
+      }
     }
-    if (fs.existsSync(candidate)) {
-      filePath = candidate;
+
+    if (filePath) {
       break;
     }
   }

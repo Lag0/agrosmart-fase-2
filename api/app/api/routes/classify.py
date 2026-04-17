@@ -23,7 +23,7 @@ router = APIRouter()
 async def classify(
     request: Request,
     image: UploadFile = File(...),
-    sha256: str = Form(None),
+    sha256: str | None = Form(None),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     # Validate multipart

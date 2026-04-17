@@ -3,14 +3,14 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { eq } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/shared/db/client";
 import { analyses, fields } from "@/shared/db/schema";
-import { eq } from "drizzle-orm";
-import { atomicWrite, checkDiskSpace, guardPath } from "@/shared/lib/fs-safe";
-import { sha256Hex } from "@/shared/lib/hash";
 import { env } from "@/shared/lib/env";
 import type { ActionErrorCode, ActionResult } from "@/shared/lib/errors";
+import { atomicWrite, checkDiskSpace, guardPath } from "@/shared/lib/fs-safe";
+import { sha256Hex } from "@/shared/lib/hash";
 
 const ALLOWED_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -27,6 +27,9 @@ const EXT_TO_MIME: Record<string, string> = {
   ".bmp": "image/bmp",
 };
 
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".bmp"] as const;
+const UPLOADS_DIR = path.resolve(process.cwd(), "../data/uploads");
+
 function resolveMimeType(file: File): string {
   if (file.type && ALLOWED_MIME[file.type]) return file.type;
   // Browsers may omit File.type on drag-and-drop — infer from extension
@@ -36,6 +39,57 @@ function resolveMimeType(file: File): string {
     return EXT_TO_MIME[ext] ?? "";
   }
   return file.type;
+}
+
+function findExistingImagePath(dir: string, stem: string): string | null {
+  for (const ext of IMAGE_EXTENSIONS) {
+    const candidate = path.join(dir, `${stem}${ext}`);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function extFromContentType(contentType: string | null): string {
+  if (!contentType) return ".jpg";
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase();
+  if (!normalized) return ".jpg";
+  const ext = ALLOWED_MIME[normalized];
+  return ext ? `.${ext}` : ".jpg";
+}
+
+async function fetchAnnotatedFromApi(
+  requestId: string,
+  sha256: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${env.API_BASE_URL}/images/annotated/${requestId}`,
+      {
+        method: "GET",
+        headers: { "X-Request-Id": requestId },
+        cache: "no-store",
+      },
+    );
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const annotatedDir = path.join(UPLOADS_DIR, "annotated");
+    fs.mkdirSync(annotatedDir, { recursive: true });
+
+    const ext = extFromContentType(res.headers.get("content-type"));
+    const canonicalPath = path.join(annotatedDir, `${sha256}${ext}`);
+    guardPath(UPLOADS_DIR, canonicalPath);
+
+    const data = new Uint8Array(await res.arrayBuffer());
+    await atomicWrite(canonicalPath, data);
+    return canonicalPath;
+  } catch {
+    return null;
+  }
 }
 
 export type UploadResult = {
@@ -59,7 +113,13 @@ type ApiResponse = {
   affected_pct: number;
   leaf_pixels: number;
   diseased_pixels: number;
-  bounding_boxes?: Array<{ x: number; y: number; w: number; h: number; area_px: number }>;
+  bounding_boxes?: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    area_px: number;
+  }>;
   processing_ms?: number;
   api_version?: string;
   warnings?: string[];
@@ -118,7 +178,7 @@ export async function uploadImage(
     }
 
     // 1. Disk space check
-    await checkDiskSpace(env.UPLOADS_DIR);
+    await checkDiskSpace(UPLOADS_DIR);
 
     // 2. Size check
     if (file.size > 8 * 1024 * 1024) {
@@ -171,9 +231,9 @@ export async function uploadImage(
     }
 
     // 6. Atomic write original
-    const originalDir = path.join(env.UPLOADS_DIR, "original");
+    const originalDir = path.join(UPLOADS_DIR, "original");
     const originalPath = path.join(originalDir, `${sha256}.${ext}`);
-    guardPath(env.UPLOADS_DIR, originalPath);
+    guardPath(UPLOADS_DIR, originalPath);
     fs.mkdirSync(originalDir, { recursive: true });
     await atomicWrite(originalPath, bytes);
 
@@ -181,10 +241,10 @@ export async function uploadImage(
     let thumbPath: string | null = null;
     try {
       const sharp = (await import("sharp")).default;
-      const thumbDir = path.join(env.UPLOADS_DIR, "thumbs");
+      const thumbDir = path.join(UPLOADS_DIR, "thumbs");
       fs.mkdirSync(thumbDir, { recursive: true });
       const thumbFilePath = path.join(thumbDir, `${sha256}.webp`);
-      guardPath(env.UPLOADS_DIR, thumbFilePath);
+      guardPath(UPLOADS_DIR, thumbFilePath);
       await sharp(bytes)
         .resize(320, 320, { fit: "inside", withoutEnlargement: true })
         .rotate()
@@ -217,8 +277,14 @@ export async function uploadImage(
     try {
       const analyzeController = new AbortController();
       const classifyController = new AbortController();
-      const analyzeTimeoutId = setTimeout(() => analyzeController.abort(), 15_000);
-      const classifyTimeoutId = setTimeout(() => classifyController.abort(), 15_000);
+      const analyzeTimeoutId = setTimeout(
+        () => analyzeController.abort(),
+        15_000,
+      );
+      const classifyTimeoutId = setTimeout(
+        () => classifyController.abort(),
+        15_000,
+      );
 
       const [analysisOutcome, classifyOutcome] = await Promise.allSettled([
         fetch(`${env.API_BASE_URL}/analyze`, {
@@ -255,7 +321,7 @@ export async function uploadImage(
           TIMEOUT: "TIMEOUT",
         };
         const mappedCode: ActionErrorCode =
-          (code && errorMap[code]) ? errorMap[code] : "INTERNAL";
+          code && errorMap[code] ? errorMap[code] : "INTERNAL";
         try {
           fs.unlinkSync(originalPath);
         } catch {
@@ -323,12 +389,70 @@ export async function uploadImage(
       };
     }
 
-    // 10. Annotated path (FastAPI writes this using request_id as filename)
-    const annotatedPath = path.join(
-      env.UPLOADS_DIR,
-      "annotated",
-      `${clientRequestId}.${ext}`,
+    // 10. Canonicalize annotated image path.
+    // FastAPI writes as {request_id}.{ext_detected}. We normalize to {sha256}.{ext}
+    // so retrieval is stable and deterministic across analyses pages.
+    const annotatedDir = path.join(UPLOADS_DIR, "annotated");
+    fs.mkdirSync(annotatedDir, { recursive: true });
+
+    const producedAnnotatedPath = findExistingImagePath(
+      annotatedDir,
+      clientRequestId,
     );
+    let annotatedPath: string | null = null;
+
+    if (producedAnnotatedPath) {
+      const annotatedExt =
+        path.extname(producedAnnotatedPath).toLowerCase() || ".jpg";
+      const canonicalAnnotatedPath = path.join(
+        annotatedDir,
+        `${sha256}${annotatedExt}`,
+      );
+
+      guardPath(UPLOADS_DIR, producedAnnotatedPath);
+      guardPath(UPLOADS_DIR, canonicalAnnotatedPath);
+
+      if (producedAnnotatedPath !== canonicalAnnotatedPath) {
+        try {
+          fs.renameSync(producedAnnotatedPath, canonicalAnnotatedPath);
+        } catch {
+          // Cross-device rename fallback
+          fs.copyFileSync(producedAnnotatedPath, canonicalAnnotatedPath);
+          try {
+            fs.unlinkSync(producedAnnotatedPath);
+          } catch {
+            // ignore cleanup error
+          }
+        }
+      }
+
+      annotatedPath = canonicalAnnotatedPath;
+    } else {
+      // Fallback for local split setups where API and web do not share volume.
+      annotatedPath = await fetchAnnotatedFromApi(clientRequestId, sha256);
+    }
+
+    if (!annotatedPath) {
+      try {
+        fs.unlinkSync(originalPath);
+      } catch {
+        // ignore cleanup error
+      }
+      if (thumbPath) {
+        try {
+          fs.unlinkSync(thumbPath);
+        } catch {
+          // ignore cleanup error
+        }
+      }
+      return {
+        success: false,
+        error: {
+          code: "INTERNAL",
+          message: "Annotated image was not produced by analysis API",
+        },
+      };
+    }
 
     // 11. INSERT analysis row
     const now = Date.now();

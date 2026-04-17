@@ -57,7 +57,7 @@ export function CardSection({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="font-heading text-base">{title}</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-0">{children}</CardContent>
     </Card>

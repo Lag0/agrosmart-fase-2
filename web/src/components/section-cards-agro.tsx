@@ -84,9 +84,7 @@ export function SectionCards({ data }: SectionCardsProps) {
             {card.badge && <CardAction>{card.badge}</CardAction>}
           </CardHeader>
           <CardFooter>
-            <div className="text-muted-foreground text-xs">
-              {card.footer}
-            </div>
+            <div className="text-muted-foreground text-xs">{card.footer}</div>
           </CardFooter>
         </Card>
       ))}

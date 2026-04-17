@@ -1,6 +1,10 @@
 "use client";
 
-import { RiDownload2Line, RiFileCodeLine, RiFileExcel2Line } from "@remixicon/react";
+import {
+  RiDownload2Line,
+  RiFileCodeLine,
+  RiFileExcel2Line,
+} from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # VLM Classification (OpenRouter)
     openrouter_api_key: str = ""
-    openrouter_model: str = "google/gemini-2.5-flash-lite-preview-06-05"
+    openrouter_model: str = "google/gemini-3.1-flash-lite-preview"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     classify_timeout_s: float = 10.0
     classify_max_tokens: int = 300

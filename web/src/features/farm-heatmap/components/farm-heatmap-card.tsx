@@ -10,7 +10,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+} from "@/components/ui/chart";
 import type { HeatmapRow } from "@/shared/db/queries/heatmap";
 
 interface FarmHeatmapCardProps {
@@ -80,64 +84,73 @@ export function FarmHeatmapCard({ data }: FarmHeatmapCardProps) {
     };
   });
 
+  const hasRenderableData = chartData.some((entry) => entry.sampleCount > 0);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-heading text-sm font-semibold tracking-tight">
-          Mapa de calor por talhão
-        </CardTitle>
-        <CardDescription>
-          Média de afetação nos últimos 30 dias
-        </CardDescription>
+        <CardTitle>Mapa de calor por talhão</CardTitle>
+        <CardDescription>Média de afetação nos últimos 30 dias</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="aspect-auto h-[320px] w-full">
-          <BarChart
-            accessibilityLayer
-            data={chartData}
-            layout="vertical"
-            margin={{ left: 0 }}
+        {!hasRenderableData ? (
+          <div className="text-muted-foreground flex h-[320px] items-center justify-center rounded-2xl border border-dashed text-sm">
+            Sem amostras suficientes para o mapa de calor nos últimos 30 dias.
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[320px] w-full"
           >
-            <YAxis
-              dataKey="label"
-              type="category"
-              tickLine={false}
-              tickMargin={10}
-              axisLine={false}
-              width={90}
-              tick={{ fontSize: 12 }}
-              interval={0}
-            />
-            <XAxis dataKey="avgAffected" type="number" hide />
-            <ChartTooltip
-              cursor={false}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
-                const d = payload[0].payload;
-                const meta = farmMeta.get(d.farmId);
-                return (
-                  <div className="rounded-lg border bg-background p-3 text-sm shadow-md">
-                    <div className="flex items-center gap-2 font-medium">
-                      <span
-                        className="inline-block size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: d.fill ?? meta?.color }}
-                      />
-                      {d.farmName || meta?.name}
+            <BarChart
+              accessibilityLayer
+              data={chartData}
+              layout="vertical"
+              margin={{ left: 0 }}
+            >
+              <YAxis
+                dataKey="label"
+                type="category"
+                tickLine={false}
+                tickMargin={10}
+                axisLine={false}
+                width={90}
+                tick={{ fontSize: 12 }}
+                interval={0}
+              />
+              <XAxis dataKey="avgAffected" type="number" hide />
+              <ChartTooltip
+                cursor={false}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  const meta = farmMeta.get(d.farmId);
+                  return (
+                    <div className="rounded-lg border bg-background p-3 text-sm shadow-md">
+                      <div className="flex items-center gap-2 font-medium">
+                        <span
+                          className="inline-block size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: d.fill ?? meta?.color }}
+                        />
+                        {d.farmName || meta?.name}
+                      </div>
+                      <p className="text-muted-foreground mt-1">
+                        {d.fieldName ?? d.label} ·{" "}
+                        {severityBadge(d.avgAffected)} {d.avgAffected}% ·{" "}
+                        {d.sampleCount} amost.
+                      </p>
                     </div>
-                    <p className="text-muted-foreground mt-1">
-                      {d.fieldName ?? d.label} · {severityBadge(d.avgAffected)} {d.avgAffected}% · {d.sampleCount} amost.
-                    </p>
-                  </div>
-                );
-              }}
-            />
-            <Bar dataKey="avgAffected" radius={4}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ChartContainer>
+                  );
+                }}
+              />
+              <Bar dataKey="avgAffected" radius={4}>
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+        )}
       </CardContent>
       <CardFooter className="flex flex-col gap-2 text-sm">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ class AnalysisResponse(BaseModel):
     bounding_boxes: list[BoundingBox]
     processing_ms: float
     api_version: str
-    warnings: list[str] = []
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

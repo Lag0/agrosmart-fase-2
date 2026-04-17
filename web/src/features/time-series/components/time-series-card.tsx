@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import {
   Card,
@@ -55,25 +55,23 @@ export function TimeSeriesCard({ data }: TimeSeriesCardProps) {
   }, [data, timeRange]);
 
   const descriptionText =
-    timeRange === "7d"
-      ? "Últimos 7 dias"
-      : "Últimos 30 dias";
+    timeRange === "7d" ? "Últimos 7 dias" : "Últimos 30 dias";
 
   const descriptionFull =
     timeRange === "7d"
       ? "Distribuição de severidade nos últimos 7 dias"
       : "Distribuição de severidade nos últimos 30 dias";
 
+  const hasRenderableData = filteredData.some(
+    (point) => point.healthy > 0 || point.beginning > 0 || point.diseased > 0,
+  );
+
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle className="font-heading text-sm font-semibold tracking-tight">
-          Evolução temporal
-        </CardTitle>
+        <CardTitle>Evolução temporal</CardTitle>
         <CardDescription>
-          <span className="hidden @[540px]/card:block">
-            {descriptionFull}
-          </span>
+          <span className="hidden @[540px]/card:block">{descriptionFull}</span>
           <span className="@[540px]/card:hidden">{descriptionText}</span>
         </CardDescription>
         <CardAction>
@@ -107,97 +105,103 @@ export function TimeSeriesCard({ data }: TimeSeriesCardProps) {
         </CardAction>
       </CardHeader>
       <CardContent className="px-2 pt-0 sm:px-6 sm:pt-0">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <AreaChart
-            data={filteredData}
-            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+        {!hasRenderableData ? (
+          <div className="text-muted-foreground flex h-[250px] items-center justify-center rounded-2xl border border-dashed text-sm">
+            Sem dados suficientes para montar o gráfico neste período.
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[250px] w-full"
           >
-            <defs>
-              <linearGradient id="fillHealthy" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-healthy)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-healthy)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              <linearGradient id="fillBeginning" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-beginning)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-beginning)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              <linearGradient id="fillDiseased" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-diseased)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-diseased)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={isMobile ? 48 : 32}
-              tickFormatter={(value: string) => value.slice(5)}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) => {
-                    const str =
-                      typeof value === "string" ? value : String(value);
-                    return str.slice(5);
-                  }}
-                  indicator="dot"
-                />
-              }
-            />
-            <Area
-              type="monotone"
-              dataKey="diseased"
-              stackId="1"
-              stroke="var(--color-diseased)"
-              fill="url(#fillDiseased)"
-            />
-            <Area
-              type="monotone"
-              dataKey="beginning"
-              stackId="1"
-              stroke="var(--color-beginning)"
-              fill="url(#fillBeginning)"
-            />
-            <Area
-              type="monotone"
-              dataKey="healthy"
-              stackId="1"
-              stroke="var(--color-healthy)"
-              fill="url(#fillHealthy)"
-            />
-          </AreaChart>
-        </ChartContainer>
+            <AreaChart
+              data={filteredData}
+              margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+            >
+              <defs>
+                <linearGradient id="fillHealthy" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-healthy)"
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-healthy)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                <linearGradient id="fillBeginning" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-beginning)"
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-beginning)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                <linearGradient id="fillDiseased" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-diseased)"
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-diseased)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={isMobile ? 48 : 32}
+                tickFormatter={(value: string) => value.slice(5)}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) => {
+                      const str =
+                        typeof value === "string" ? value : String(value);
+                      return str.slice(5);
+                    }}
+                    indicator="dot"
+                  />
+                }
+              />
+              <Area
+                type="monotone"
+                dataKey="diseased"
+                stackId="1"
+                stroke="var(--color-diseased)"
+                fill="url(#fillDiseased)"
+              />
+              <Area
+                type="monotone"
+                dataKey="beginning"
+                stackId="1"
+                stroke="var(--color-beginning)"
+                fill="url(#fillBeginning)"
+              />
+              <Area
+                type="monotone"
+                dataKey="healthy"
+                stackId="1"
+                stroke="var(--color-healthy)"
+                fill="url(#fillHealthy)"
+              />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );

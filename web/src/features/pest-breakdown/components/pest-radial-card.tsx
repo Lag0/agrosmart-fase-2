@@ -18,14 +18,6 @@ import {
 } from "@/components/ui/chart";
 import type { PestBreakdownRow } from "@/shared/db/queries/pest-breakdown";
 
-const PEST_LABELS: Record<string, string> = {
-  ferrugem: "Ferrugem",
-  mancha_parda: "Mancha parda",
-  oidio: "Oídio",
-  lagarta: "Lagarta",
-  nao_identificado: "Não identif.",
-};
-
 interface PestRadialCardProps {
   data: PestBreakdownRow[];
 }
@@ -35,7 +27,8 @@ const chartConfig = {
   mancha_parda: { label: "Mancha parda", color: "var(--chart-2)" },
   oidio: { label: "Oídio", color: "var(--chart-3)" },
   lagarta: { label: "Lagarta", color: "var(--chart-4)" },
-  nao_identificado: { label: "Não identif.", color: "var(--chart-5)" },
+  outro: { label: "Outro", color: "var(--chart-5)" },
+  nao_identificado: { label: "Não identif.", color: "var(--muted-foreground)" },
 } satisfies ChartConfig;
 
 export function PestRadialCard({ data }: PestRadialCardProps) {
@@ -47,34 +40,36 @@ export function PestRadialCard({ data }: PestRadialCardProps) {
     fill: `var(--color-${row.pestType})`,
   }));
 
+  const hasRenderableData = total > 0;
+
   return (
     <Card className="flex flex-col">
       <CardHeader className="items-center pb-0">
-        <CardTitle className="font-heading text-sm font-semibold tracking-tight">
-          Distribuição por praga
-        </CardTitle>
+        <CardTitle>Distribuição por praga</CardTitle>
         <CardDescription>
           {total.toLocaleString("pt-BR")} ocorrências nos últimos 30 dias
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
-        <ChartContainer
-          config={chartConfig}
-          className="mx-auto aspect-square max-h-[300px]"
-        >
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="count"
-              nameKey="pestType"
-            />
-            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-            <ChartLegend
-              content={<ChartLegendContent nameKey="pestType" />}
-              className="-translate-y-2 flex-wrap gap-2 *:basis-1/4 *:justify-center"
-            />
-          </PieChart>
-        </ChartContainer>
+        {!hasRenderableData ? (
+          <div className="text-muted-foreground flex h-[300px] items-center justify-center rounded-2xl border border-dashed text-sm">
+            Sem ocorrências para distribuição nos últimos 30 dias.
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="mx-auto aspect-square max-h-[300px]"
+          >
+            <PieChart>
+              <Pie data={chartData} dataKey="count" nameKey="pestType" />
+              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+              <ChartLegend
+                content={<ChartLegendContent nameKey="pestType" />}
+                className="-translate-y-2 flex-wrap gap-2 *:basis-1/4 *:justify-center"
+              />
+            </PieChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );

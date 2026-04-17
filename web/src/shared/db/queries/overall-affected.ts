@@ -17,7 +17,9 @@ export async function getOverallAffected(): Promise<OverallAffected> {
 
   const row = await db
     .select({
-      avgAffectedPct: sql<number>`round(avg(${analyses.affectedPct}), 1)`.as("avg_affected_pct"),
+      avgAffectedPct: sql<number>`round(avg(${analyses.affectedPct}), 1)`.as(
+        "avg_affected_pct",
+      ),
       totalAnalyses: sql<number>`count(*)`.as("total"),
       healthyCount: sql<number>`sum(case when ${analyses.severity} = 'healthy' then 1 else 0 end)`,
       diseasedCount: sql<number>`sum(case when ${analyses.severity} = 'diseased' then 1 else 0 end)`,
@@ -27,8 +29,10 @@ export async function getOverallAffected(): Promise<OverallAffected> {
     .where(sql`${analyses.capturedAt} >= ${since.getTime()}`);
 
   const r = row[0];
+  const rawAvg = r.avgAffectedPct ?? 0;
+
   return {
-    avgAffectedPct: r.avgAffectedPct ?? 0,
+    avgAffectedPct: Math.min(Math.max(rawAvg, 0), 100),
     totalAnalyses: r.totalAnalyses ?? 0,
     healthyCount: r.healthyCount ?? 0,
     diseasedCount: r.diseasedCount ?? 0,

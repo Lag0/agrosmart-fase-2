@@ -26,6 +26,7 @@ const PEST_LABELS: Record<string, string> = {
   mancha_parda: "Mancha Parda",
   oidio: "Oídio",
   lagarta: "Lagarta",
+  outro: "Outro",
 };
 
 export function formatPestLabel(pestType: string | null | undefined): string {

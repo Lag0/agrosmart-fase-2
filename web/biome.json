@@ -12,7 +12,8 @@
       "!**/.pi",
       "!**/.pi",
       "!**/.claude",
-      "!**/.claude"
+      "!**/.claude",
+      "!drizzle/meta"
     ]
   },
   "css": {
@@ -35,6 +36,9 @@
       },
       "security": {
         "noDangerouslySetInnerHtml": "off"
+      },
+      "performance": {
+        "noImgElement": "off"
       },
       "suspicious": {
         "noArrayIndexKey": "off",

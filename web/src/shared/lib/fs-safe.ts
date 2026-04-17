@@ -1,6 +1,6 @@
-import { writeFile, rename, unlink } from "node:fs/promises";
-import * as path from "node:path";
 import * as fs from "node:fs";
+import { rename, unlink, writeFile } from "node:fs/promises";
+import * as path from "node:path";
 
 const MIN_FREE_BYTES = 500 * 1024 * 1024; // 500 MB
 
@@ -8,7 +8,11 @@ export async function checkDiskSpace(dir: string): Promise<void> {
   // Use fs.statfsSync (Node 19+) or fallback gracefully
   try {
     // statfsSync is available in Node 19+ / Bun
-    const stats = (fs as unknown as { statfsSync: (p: string) => { bfree: number; bsize: number } }).statfsSync(dir);
+    const stats = (
+      fs as unknown as {
+        statfsSync: (p: string) => { bfree: number; bsize: number };
+      }
+    ).statfsSync(dir);
     const freeBytes = stats.bfree * stats.bsize;
     if (freeBytes < MIN_FREE_BYTES) {
       throw new Error("DISK_FULL");

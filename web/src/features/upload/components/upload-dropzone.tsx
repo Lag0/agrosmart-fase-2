@@ -1,24 +1,41 @@
 "use client";
 
 import {
-  useRef,
-  useState,
-  useTransition,
-  useCallback,
-  type DragEvent,
-  type ChangeEvent,
-} from "react";
+  RiCloseLine,
+  RiImageLine,
+  RiLoaderLine,
+  RiUploadCloud2Line,
+} from "@remixicon/react";
+import { type ChangeEvent, type DragEvent, useCallback, useState } from "react";
 import { toast } from "sonner";
-import { RiUploadCloud2Line, RiImageLine, RiCloseLine, RiLoaderLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
+import {
+  type UploadResult,
+  uploadImage,
+} from "@/features/upload/actions/upload-image";
 import { cn } from "@/lib/utils";
-import { uploadImage, type UploadResult } from "@/features/upload/actions/upload-image";
 import { ERROR_COPY_PT } from "@/shared/lib/error-copy-pt";
 import { PestTypeSelect, type PestTypeValue } from "./pest-type-select";
 import { UploadResultCard } from "./upload-result-card";
 
-const ACCEPTED_MIME = ["image/jpeg", "image/png", "image/webp", "image/bmp"];
-const ACCEPT_STRING = ACCEPTED_MIME.join(",");
+const ACCEPTED_MIME = [
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/png",
+  "image/webp",
+  "image/bmp",
+] as const;
+const HEIC_MIME = [
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+] as const;
+const ACCEPT_STRING = [...ACCEPTED_MIME, ...HEIC_MIME, ".heic", ".heif"].join(
+  ",",
+);
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 const EXT_MIME_MAP: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -26,6 +43,8 @@ const EXT_MIME_MAP: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".bmp": "image/bmp",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
 };
 
 function guessMimeFromExtension(filename: string): string {
@@ -35,6 +54,174 @@ function guessMimeFromExtension(filename: string): string {
   return EXT_MIME_MAP[ext] ?? "";
 }
 
+function isHeicFile(candidate: File): boolean {
+  const inferredType = (
+    candidate.type || guessMimeFromExtension(candidate.name)
+  ).toLowerCase();
+
+  if (HEIC_MIME.includes(inferredType as (typeof HEIC_MIME)[number])) {
+    return true;
+  }
+
+  if (inferredType.includes("heic") || inferredType.includes("heif")) {
+    return true;
+  }
+
+  const lowerName = candidate.name.toLowerCase();
+  return lowerName.endsWith(".heic") || lowerName.endsWith(".heif");
+}
+
+function isAcceptedMime(value: string): boolean {
+  return ACCEPTED_MIME.includes(value as (typeof ACCEPTED_MIME)[number]);
+}
+
+function resolveEffectiveMime(candidate: File): string {
+  const normalizedType = candidate.type.toLowerCase();
+  if (isAcceptedMime(normalizedType)) {
+    return normalizedType;
+  }
+  return guessMimeFromExtension(candidate.name);
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("IMAGE_DECODE_FAILED"));
+    };
+
+    image.src = url;
+  });
+}
+
+async function transcodeToJpeg(
+  source: File,
+  options: { quality: number; maxDimension: number },
+): Promise<File | null> {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  try {
+    const image = await loadImageFromFile(source);
+    const largestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale =
+      largestSide > options.maxDimension
+        ? options.maxDimension / largestSide
+        : 1;
+
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", options.quality);
+    });
+
+    if (!blob) {
+      return null;
+    }
+
+    const base = source.name.replace(/\.[^.]+$/, "") || "upload";
+    return new File([blob], `${base}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function fitFileToConstraints(source: File): Promise<File | null> {
+  let current = source;
+
+  // If browser reported an unknown image MIME, normalize to JPEG first.
+  if (
+    !isAcceptedMime(resolveEffectiveMime(current)) &&
+    current.type.startsWith("image/")
+  ) {
+    const normalized = await transcodeToJpeg(current, {
+      quality: 0.9,
+      maxDimension: 4096,
+    });
+    if (normalized) {
+      current = normalized;
+    }
+  }
+
+  if (current.size <= MAX_UPLOAD_BYTES) {
+    return current;
+  }
+
+  const steps = [
+    { quality: 0.86, maxDimension: 3600 },
+    { quality: 0.78, maxDimension: 3000 },
+    { quality: 0.7, maxDimension: 2400 },
+    { quality: 0.62, maxDimension: 1920 },
+  ];
+
+  for (const step of steps) {
+    const compressed = await transcodeToJpeg(current, step);
+    if (!compressed) {
+      continue;
+    }
+    current = compressed;
+
+    if (current.size <= MAX_UPLOAD_BYTES) {
+      return current;
+    }
+  }
+
+  return current.size <= MAX_UPLOAD_BYTES ? current : null;
+}
+
+async function normalizeUploadFile(candidate: File): Promise<File | null> {
+  if (!isHeicFile(candidate)) {
+    return candidate;
+  }
+
+  try {
+    const { default: heic2any } = await import("heic2any");
+
+    const converted = await heic2any({
+      blob: candidate,
+      toType: "image/jpeg",
+      quality: 0.92,
+    });
+
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    if (!(blob instanceof Blob)) {
+      return null;
+    }
+
+    const base = candidate.name.replace(/\.(heic|heif)$/i, "") || "upload";
+    return new File([blob], `${base}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } catch {
+    return null;
+  }
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -42,39 +229,57 @@ function formatFileSize(bytes: number): string {
 }
 
 export function UploadDropzone() {
-  const [isPending, startTransition] = useTransition();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [pestType, setPestType] = useState<PestTypeValue>("nao_identificado");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
 
-  const applyFile = useCallback((candidate: File) => {
-    // Some browsers don't set File.type on drag-and-drop (e.g. .webp → "")
-    const effectiveType =
-      candidate.type || guessMimeFromExtension(candidate.name);
-    if (!ACCEPTED_MIME.includes(effectiveType)) {
-      toast.error(ERROR_COPY_PT.INVALID_MIME);
+  const applyFile = useCallback(async (candidate: File) => {
+    const normalized = await normalizeUploadFile(candidate);
+    if (!normalized) {
+      const message =
+        "Não foi possível converter a imagem HEIC. Tente JPEG/PNG.";
+      setSelectionError(message);
+      toast.error(message);
       return;
     }
-    if (candidate.size > 8 * 1024 * 1024) {
-      toast.error(ERROR_COPY_PT.IMAGE_TOO_LARGE);
+
+    const finalFile = await fitFileToConstraints(normalized);
+    if (!finalFile) {
+      const message =
+        "Imagem muito grande para upload. Use uma versão menor (até 8 MB).";
+      setSelectionError(message);
+      toast.error(message);
       return;
     }
+
+    const effectiveType = resolveEffectiveMime(finalFile);
+    if (!isAcceptedMime(effectiveType)) {
+      const message = `${ERROR_COPY_PT.INVALID_MIME} (tipo detectado: ${finalFile.type || "desconhecido"})`;
+      setSelectionError(message);
+      toast.error(message);
+      return;
+    }
+
     // Revoke previous preview to avoid memory leak
     setPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(candidate);
+      return URL.createObjectURL(finalFile);
     });
-    setFile(candidate);
+    setSelectionError(null);
+    setFile(finalFile);
     setResult(null);
   }, []);
 
   const handleFileChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const selected = e.target.files?.[0];
-      if (selected) applyFile(selected);
+      if (selected) {
+        void applyFile(selected);
+      }
       // Reset input so the same file can be re-selected
       e.target.value = "";
     },
@@ -82,25 +287,27 @@ export function UploadDropzone() {
   );
 
   const handleDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
+    (e: DragEvent<HTMLLabelElement>) => {
       e.preventDefault();
       setIsDragging(false);
-      if (isPending) return;
+      if (isSubmitting) return;
       const dropped = e.dataTransfer.files[0];
-      if (dropped) applyFile(dropped);
+      if (dropped) {
+        void applyFile(dropped);
+      }
     },
-    [applyFile, isPending],
+    [applyFile, isSubmitting],
   );
 
   const handleDragOver = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
+    (e: DragEvent<HTMLLabelElement>) => {
       e.preventDefault();
-      if (!isPending) setIsDragging(true);
+      if (!isSubmitting) setIsDragging(true);
     },
-    [isPending],
+    [isSubmitting],
   );
 
-  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => {
     // Only clear when leaving the drop zone itself, not child elements
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setIsDragging(false);
@@ -113,6 +320,7 @@ export function UploadDropzone() {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
+    setSelectionError(null);
     setResult(null);
   }, []);
 
@@ -120,10 +328,11 @@ export function UploadDropzone() {
     handleClearFile();
   }, [handleClearFile]);
 
-  const handleSubmit = useCallback(() => {
-    if (!file || isPending) return;
+  const handleSubmit = useCallback(async () => {
+    if (!file || isSubmitting) return;
 
-    startTransition(async () => {
+    setIsSubmitting(true);
+    try {
       const fd = new FormData();
       fd.append("image", file);
       fd.append("requestId", crypto.randomUUID());
@@ -147,8 +356,10 @@ export function UploadDropzone() {
       } else {
         toast.error(ERROR_COPY_PT[res.error.code] ?? "Erro desconhecido.");
       }
-    });
-  }, [file, isPending, pestType]);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [file, isSubmitting, pestType]);
 
   if (result) {
     return <UploadResultCard result={result} onReset={handleReset} />;
@@ -157,39 +368,27 @@ export function UploadDropzone() {
   return (
     <div className="flex w-full flex-col gap-4">
       {/* Drop zone */}
-      <div
-        role="button"
-        tabIndex={isPending ? -1 : 0}
+      <label
         aria-label="Área de upload de imagem"
-        aria-disabled={isPending}
+        aria-disabled={isSubmitting}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={() => {
-          if (!isPending) fileInputRef.current?.click();
-        }}
-        onKeyDown={(e) => {
-          if (!isPending && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            fileInputRef.current?.click();
-          }
-        }}
         className={cn(
           "relative flex min-h-[260px] cursor-pointer flex-col items-center justify-center gap-4 rounded-4xl border-2 border-dashed p-8 text-center transition-colors",
           isDragging
             ? "border-primary bg-primary/5"
             : "border-border hover:border-primary/50 hover:bg-muted/30",
-          isPending && "pointer-events-none cursor-not-allowed opacity-60",
+          isSubmitting && "pointer-events-none cursor-not-allowed opacity-60",
           file && "bg-muted/20",
         )}
       >
         <input
-          ref={fileInputRef}
           type="file"
           accept={ACCEPT_STRING}
           className="sr-only"
           onChange={handleFileChange}
-          disabled={isPending}
+          disabled={isSubmitting}
           aria-hidden="true"
           tabIndex={-1}
         />
@@ -204,11 +403,12 @@ export function UploadDropzone() {
                 alt="Pré-visualização da imagem selecionada"
                 className="max-h-[180px] max-w-full rounded-2xl object-contain shadow-sm"
               />
-              {!isPending && (
+              {!isSubmitting && (
                 <button
                   type="button"
                   aria-label="Remover imagem"
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleClearFile();
                   }}
@@ -246,24 +446,30 @@ export function UploadDropzone() {
             </div>
           </div>
         )}
-      </div>
+      </label>
+
+      {selectionError ? (
+        <p className="text-sm text-destructive">{selectionError}</p>
+      ) : null}
 
       {/* Pest type selector */}
       <PestTypeSelect
         value={pestType}
         onChange={setPestType}
-        disabled={isPending}
+        disabled={isSubmitting}
       />
 
       {/* Submit button */}
       <Button
         type="button"
-        onClick={handleSubmit}
-        disabled={isPending || !file}
-        aria-busy={isPending}
+        onClick={() => {
+          void handleSubmit();
+        }}
+        disabled={isSubmitting || !file}
+        aria-busy={isSubmitting}
         className="w-full sm:w-auto"
       >
-        {isPending ? (
+        {isSubmitting ? (
           <>
             <RiLoaderLine className="animate-spin" />
             Analisando...

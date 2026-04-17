@@ -93,26 +93,31 @@ def analyze(image_path: str, output_path: str) -> dict:
             "processing_ms": round(elapsed, 2),
         }
 
-    # --- Diseased region (yellow + brown WITHIN the leaf area) ---
+    # --- Diseased region (yellow + brown) ---
     yellow_mask = cv2.inRange(hsv, LOWER_YELLOW, UPPER_YELLOW)
     brown_mask = cv2.inRange(hsv, LOWER_BROWN, UPPER_BROWN)
 
     diseased_mask = cv2.bitwise_or(yellow_mask, brown_mask)
-    # Only count diseased pixels that fall INSIDE the leaf region
-    diseased_mask = cv2.bitwise_and(diseased_mask, green_mask)
-    diseased_mask = cv2.morphologyEx(diseased_mask, cv2.MORPH_CLOSE, KERNEL, iterations=2)
-    diseased_mask = cv2.morphologyEx(diseased_mask, cv2.MORPH_OPEN, KERNEL, iterations=1)
+    # Plant area = healthy (green) + diseased (yellow/brown) tissue
+    # affected_pct = diseased / plant_total * 100
+    plant_mask = cv2.bitwise_or(green_mask, diseased_mask)
+    plant_pixels = int(cv2.countNonZero(plant_mask))
 
-    diseased_pixels = int(cv2.countNonZero(diseased_mask))
+    # For bounding boxes, find disease contours within the plant region
+    diseased_in_plant = cv2.bitwise_and(diseased_mask, plant_mask)
+    diseased_in_plant = cv2.morphologyEx(diseased_in_plant, cv2.MORPH_CLOSE, KERNEL, iterations=2)
+    diseased_in_plant = cv2.morphologyEx(diseased_in_plant, cv2.MORPH_OPEN, KERNEL, iterations=1)
 
-    # --- Affected percentage (of leaf area) ---
-    affected_pct = min((diseased_pixels / leaf_pixels) * 100.0, 100.0) if leaf_pixels > 0 else 0.0
+    diseased_pixels = int(cv2.countNonZero(diseased_in_plant))
+
+    # --- Affected percentage (diseased tissue / total plant tissue) ---
+    affected_pct = min((diseased_pixels / plant_pixels) * 100.0, 100.0) if plant_pixels > 0 else 0.0
 
     severity = classify_severity(affected_pct)
 
     # --- Contours and bounding boxes ---
     contours, _ = cv2.findContours(
-        diseased_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        diseased_in_plant, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     bounding_boxes: list[dict] = []

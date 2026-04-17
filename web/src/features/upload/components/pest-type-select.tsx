@@ -1,5 +1,7 @@
 "use client";
 
+import { RiInformationLine } from "@remixicon/react";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -7,13 +9,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { RiInformationLine } from "@remixicon/react";
 
 export const PEST_TYPES = [
   { value: "nao_identificado", label: "Não identificado" },
@@ -21,6 +21,7 @@ export const PEST_TYPES = [
   { value: "mancha_parda", label: "Mancha Parda" },
   { value: "oidio", label: "Oídio" },
   { value: "lagarta", label: "Lagarta" },
+  { value: "outro", label: "Outro" },
 ] as const;
 
 export type PestTypeValue = (typeof PEST_TYPES)[number]["value"];

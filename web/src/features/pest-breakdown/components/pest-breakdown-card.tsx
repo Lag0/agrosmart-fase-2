@@ -21,6 +21,7 @@ const PEST_LABELS: Record<string, string> = {
   mancha_parda: "Mancha parda",
   oidio: "Oídio",
   lagarta: "Lagarta",
+  outro: "Outro",
   nao_identificado: "Não identificado",
 };
 
@@ -43,9 +44,7 @@ export function PestBreakdownCard({ data }: PestBreakdownCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-heading text-base">
-          Distribuição por praga
-        </CardTitle>
+        <CardTitle>Distribuição por praga</CardTitle>
         <CardDescription>Ocorrências nos últimos 30 dias</CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-0 sm:px-6">

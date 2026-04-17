@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { Suspense } from "react";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +10,8 @@ import { KpiCardsServer } from "@/features/kpis/server/get-kpis";
 import { OverallAffectedServer } from "@/features/overall-affected/server/get-overall-affected";
 import { PestRadialServer } from "@/features/pest-breakdown/server/get-pest-radial";
 import { TimeSeriesServer } from "@/features/time-series/server/get-time-series";
+
+export const dynamic = "force-dynamic";
 
 function KpiSkeleton() {
   return (
@@ -25,10 +28,11 @@ function ChartSkeleton() {
 }
 
 export default function HomePage() {
+  noStore();
   return (
     <SidebarInset>
       <div className="flex flex-1 flex-col gap-6 p-6 pb-20 md:pb-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1>Dashboard</h1>
             <p className="text-muted-foreground mt-1 text-sm">
