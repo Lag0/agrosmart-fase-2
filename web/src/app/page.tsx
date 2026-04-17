@@ -1,13 +1,14 @@
 import { Suspense } from "react";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExportButton } from "@/features/export/components/export-button";
 import { FarmHeatmapServer } from "@/features/farm-heatmap/server/get-farm-heatmap";
+import { GalleryStripSkeleton } from "@/features/gallery/components/gallery-strip";
 import { GalleryServer } from "@/features/gallery/server/get-gallery";
 import { KpiCardsServer } from "@/features/kpis/server/get-kpis";
 import { OverallAffectedServer } from "@/features/overall-affected/server/get-overall-affected";
 import { PestRadialServer } from "@/features/pest-breakdown/server/get-pest-radial";
 import { TimeSeriesServer } from "@/features/time-series/server/get-time-series";
-import { GalleryStripSkeleton } from "@/features/gallery/components/gallery-strip";
 
 function KpiSkeleton() {
   return (
@@ -26,7 +27,16 @@ function ChartSkeleton() {
 export default function HomePage() {
   return (
     <SidebarInset>
-      <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+      <div className="flex flex-1 flex-col gap-6 p-6 pb-20 md:pb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1>Dashboard</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Visão geral da plataforma
+            </p>
+          </div>
+          <ExportButton />
+        </div>
         {/* KPIs */}
         <Suspense fallback={<KpiSkeleton />}>
           <KpiCardsServer />

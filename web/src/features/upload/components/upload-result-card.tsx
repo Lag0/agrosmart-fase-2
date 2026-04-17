@@ -1,13 +1,24 @@
 "use client";
 
+import {
+  RiArrowRightLine,
+  RiInformationLine,
+  RiRefreshLine,
+} from "@remixicon/react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RiArrowRightLine, RiRefreshLine, RiInformationLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import type { UploadResult } from "@/features/upload/actions/upload-image";
-import { PEST_TYPES } from "./pest-type-select";
 import { cn } from "@/lib/utils";
+import { confidenceColor, formatConfidence } from "@/shared/lib/format";
+import { PEST_TYPES } from "./pest-type-select";
 
 interface UploadResultCardProps {
   result: UploadResult;
@@ -39,8 +50,7 @@ function getSeverityStyle(severity: string): {
       };
     default:
       return {
-        badgeClass:
-          "bg-secondary text-secondary-foreground",
+        badgeClass: "bg-secondary text-secondary-foreground",
         label: severity,
       };
   }
@@ -49,22 +59,6 @@ function getSeverityStyle(severity: string): {
 function getPestLabel(pestTypeValue: string): string {
   const found = PEST_TYPES.find((p) => p.value === pestTypeValue);
   return found?.label ?? pestTypeValue.replace(/_/g, " ");
-}
-
-function getConfidenceStyle(confidence: number | null): string {
-  if (confidence == null) {
-    return "bg-secondary text-secondary-foreground";
-  }
-
-  if (confidence >= 0.7) {
-    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400";
-  }
-
-  if (confidence >= 0.4) {
-    return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-  }
-
-  return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
 }
 
 export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
@@ -103,27 +97,21 @@ export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="flex flex-col gap-0.5">
-            <span className="text-muted-foreground text-xs">
-              Área afetada
-            </span>
+            <span className="text-muted-foreground text-xs">Área afetada</span>
             <span className="font-heading tabular-nums text-3xl font-bold tracking-tight">
               {result.affectedPct.toFixed(1)}%
             </span>
           </div>
 
           <div className="flex flex-col gap-0.5">
-            <span className="text-muted-foreground text-xs">
-              Severidade
-            </span>
+            <span className="text-muted-foreground text-xs">Severidade</span>
             <span className="text-sm font-medium">
               {result.severityLabelPt}
             </span>
           </div>
 
           <div className="flex flex-col gap-0.5">
-            <span className="text-muted-foreground text-xs">
-              Tipo de praga
-            </span>
+            <span className="text-muted-foreground text-xs">Tipo de praga</span>
             <span className="text-sm font-medium">
               {getPestLabel(result.pestType)}
             </span>
@@ -133,8 +121,9 @@ export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
         {showAiSuggestion && (
           <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className={getConfidenceStyle(result.pestTypeConfidence)}>
-                🤖 {getPestLabel(result.pestTypeAi ?? "nao_identificado")} • {((result.pestTypeConfidence ?? 0) * 100).toFixed(0)}%
+              <Badge className={confidenceColor(result.pestTypeConfidence)}>
+                🤖 {getPestLabel(result.pestTypeAi ?? "nao_identificado")} •{" "}
+                {formatConfidence(result.pestTypeConfidence)}
               </Badge>
               {result.pestTypeModel && (
                 <span className="text-muted-foreground text-xs">
@@ -152,8 +141,12 @@ export function UploadResultCard({ result, onReset }: UploadResultCardProps) {
             {result.pestTypeReasoning && (
               <details className="group rounded-xl border border-border/70 bg-background/80 px-3 py-2">
                 <summary className="cursor-pointer list-none text-sm font-medium marker:hidden">
-                  <span className="group-open:hidden">Ver justificativa da IA</span>
-                  <span className="hidden group-open:inline">Ocultar justificativa da IA</span>
+                  <span className="group-open:hidden">
+                    Ver justificativa da IA
+                  </span>
+                  <span className="hidden group-open:inline">
+                    Ocultar justificativa da IA
+                  </span>
                 </summary>
                 <p className="text-muted-foreground mt-2 text-sm leading-6">
                   {result.pestTypeReasoning}

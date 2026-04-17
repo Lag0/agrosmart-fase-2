@@ -9,6 +9,7 @@ export type GalleryItem = {
   severityLabelPt: string;
   pestType: string;
   pestTypeAi: string | null;
+  pestTypeConfidence: number | null;
   affectedPct: number;
   thumbnailPath: string | null;
   capturedAt: number; // timestamp_ms
@@ -27,6 +28,7 @@ export async function getGalleryItems(limit = 10): Promise<GalleryItem[]> {
       severityLabelPt: analyses.severityLabelPt,
       pestType: analyses.pestType,
       pestTypeAi: analyses.pestTypeAi,
+      pestTypeConfidence: analyses.pestTypeConfidence,
       affectedPct: analyses.affectedPct,
       thumbnailPath: analyses.thumbnailPath,
       capturedAt: sql<number>`${analyses.capturedAt}`,
