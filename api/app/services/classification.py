@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import logging
 import re
@@ -83,8 +82,6 @@ _cache: dict[str, _CacheEntry] = {}
 # ---------------------------------------------------------------------------
 
 
-def _compute_sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
 
 
 def _extract_json(text: str) -> dict:
@@ -183,27 +180,26 @@ async def classify_image(
     if settings is None:
         settings = get_settings()
 
-    if sha256 is None:
-        sha256 = _compute_sha256(image_bytes)
-
     model_name = settings.openrouter_model
 
-    # --- Check cache ---
-    now = time.monotonic()
-    cached = _cache.get(sha256)
-    if cached is not None:
-        if cached.expires_at > now:
-            logger.debug("Cache hit for %s", sha256[:12])
-            return cached.result
-        # Expired — evict
-        del _cache[sha256]
+    if sha256 is None:
+        # No hash provided — skip cache, classify directly
+        logger.debug("No sha256 provided — cache bypassed")
 
-    # --- Guard: API key required ---
-    if not settings.openrouter_api_key:
+    # --- Check cache (only when sha256 is provided) ---
+    if sha256 is not None:
+        now = time.monotonic()
+        cached = _cache.get(sha256)
+        if cached is not None:
+            if cached.expires_at > now:
+                logger.debug("Cache hit for %s", sha256[:12])
+                return cached.result
+            # Expired — evict
+            del _cache[sha256]
+    elif not settings.openrouter_api_key:
+        # No hash + no key = can't classify, return fallback immediately
         logger.warning("OpenRouter API key not configured — returning fallback")
         return _fallback(model_name)
-
-    # --- Call OpenRouter ---
     try:
         client = AsyncOpenAI(
             api_key=settings.openrouter_api_key,
@@ -266,11 +262,12 @@ async def classify_image(
         logger.exception("VLM classification failed — returning fallback")
         result = _fallback(model_name)
 
-    # --- Store in cache ---
-    _cache[sha256] = _CacheEntry(
-        result=result,
-        expires_at=now + settings.cache_ttl_s,
-    )
+    # --- Store in cache (only when sha256 is provided) ---
+    if sha256 is not None:
+        _cache[sha256] = _CacheEntry(
+            result=result,
+            expires_at=time.monotonic() + settings.cache_ttl_s,
+        )
 
     return result
 
