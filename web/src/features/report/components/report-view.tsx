@@ -6,6 +6,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GenerateRecommendationButton } from "@/features/recommendations/components/generate-recommendation-button";
+import { RecommendationContent } from "@/features/recommendations/components/recommendation-content";
 import {
   formatPestTypeLabel,
   formatReportDate,
@@ -114,16 +116,15 @@ export function ReportView({ data }: { data: ReportData }) {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
           <CardTitle className="flex items-center gap-2">
             <RiSparklingLine className="size-5" />
             Recomendação consolidada
           </CardTitle>
+          <GenerateRecommendationButton />
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm leading-relaxed">
-            {data.recommendation.content}
-          </p>
+          <RecommendationContent content={data.recommendation.content} />
           <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline">Fonte: {data.recommendation.source}</Badge>
             <Badge variant="outline">Modelo: {data.recommendation.model}</Badge>
