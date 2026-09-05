@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import re
@@ -11,6 +12,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from openai import AsyncOpenAI
+from PIL import Image
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..config import Settings, get_settings
@@ -286,8 +288,8 @@ async def classify_image(
             settings.openrouter_base_url,
         )
 
-        b64_image = base64.standard_b64encode(image_bytes).decode("ascii")
-        mime = _sniff_mime(image_bytes)
+        payload_bytes, mime = _prepare_for_vlm(image_bytes)
+        b64_image = base64.standard_b64encode(payload_bytes).decode("ascii")
 
         response = await client.chat.completions.create(
             model=model_name,
@@ -347,6 +349,45 @@ async def classify_image(
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Preparo da imagem para o VLM
+# ---------------------------------------------------------------------------
+MAX_VLM_EDGE = 1024
+JPEG_QUALITY = 88
+
+
+def _prepare_for_vlm(data: bytes) -> tuple[bytes, str]:
+    """Reduz a imagem antes de enviá-la ao modelo.
+
+    Uma foto de celular chega com milhares de pixels por lado e é cobrada em
+    tiles: mandá-la crua multiplica o custo sem melhorar o diagnóstico, que se
+    decide por textura (pústula elevada, lesão plana, recobrimento
+    pulverulento) — preservada a 1024 px na maior aresta.
+
+    Se o redimensionamento falhar por qualquer motivo, devolve os bytes
+    originais: reduzir custo nunca deve custar uma classificação.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if max(image.size) <= MAX_VLM_EDGE:
+                return data, _sniff_mime(data)
+
+            image = image.convert("RGB")
+            image.thumbnail((MAX_VLM_EDGE, MAX_VLM_EDGE), Image.Resampling.LANCZOS)
+
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+            resized = buffer.getvalue()
+
+        logger.debug(
+            "Imagem reduzida para o VLM: %d bytes -> %d bytes", len(data), len(resized)
+        )
+        return resized, "image/jpeg"
+    except Exception:
+        logger.warning("Falha ao redimensionar imagem; enviando original", exc_info=True)
+        return data, _sniff_mime(data)
 
 
 def _sniff_mime(data: bytes) -> str:
