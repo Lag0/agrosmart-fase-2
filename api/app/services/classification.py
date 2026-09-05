@@ -35,13 +35,13 @@ DIAGNÓSTICO DIFERENCIAL — CRITÉRIOS-CHAVE
 1. Ferrugem (Pucciniales: Phakopsora, Puccinia, Uromyces, Hemileia)
    - Pústulas ELEVADAS e pulverulentas na face INFERIOR da folha
    - Cor: alaranjada, amarela, parda ou enegrecida conforme estágio
-   - Clorose amarelada na face superior (face同期 da pústula inferior)
+   - Clorose amarelada na face superior (correspondente à pústula na face inferior)
    - Libera pó (urediósporos) ao toque
 
 2. Mancha foliar / Mancha parda (Septoria, Cercospora, Alternaria, Phyllosticta)
    - Lesões PLANAS, sem relevo — necróticas e secas
    - Halo amarelado (clorose) ao redor da lesão
-   - Anéis concêntricos ( targat-pattern, típico de Alternaria)
+   - Anéis concêntricos (padrão de alvo, típico de Alternaria)
    - Pontuações escuras internas (picnídios visíveis com lupa)
    - Bordas bem definidas, forma arredondada ou irregular
 
